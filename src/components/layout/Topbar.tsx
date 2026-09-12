@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Menu } from "lucide-react";
-import { useAppStore, type ConnectionStatus } from "@/lib/store/app";
+import { useAppStore, type ConnectionStatus } from "@/lib/store";
 import { cn } from "@/lib/utils/cn";
 import { StatusDot } from "@/components/deck/StatusDot";
 import { NAV_ITEMS } from "@/lib/nav";
@@ -29,7 +29,7 @@ export function Topbar() {
   const now = useUtcClock();
 
   const current = useMemo(() => NAV_ITEMS.find((n) => pathname.startsWith(n.to)) ?? NAV_ITEMS[0], [pathname]);
-  const meta = CONNECTION_META[connection];
+  const meta = CONNECTION_META[connection.status];
 
   const clock = now.toISOString().slice(11, 19);
 

@@ -5,6 +5,7 @@ const toneClasses = {
     signal: "border-signal/30 bg-signal-dim text-signal",
     healthy: "border-status-healthy/30 bg-status-healthy/10 text-status-healthy",
     elevated: "border-status-elevated/30 bg-status-elevated/10 text-status-elevated",
+    high: "border-status-high/35 bg-status-high/12 text-status-high",
     critical: "border-status-critical/35 bg-status-critical/12 text-status-critical",
 };
 export function Badge({ tone = "neutral", className, children, }) {

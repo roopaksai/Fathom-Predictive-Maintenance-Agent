@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { motion } from "framer-motion";
 import { TriangleAlert, X } from "lucide-react";
-import { useAppStore } from "@/lib/store/app";
+import { useAppStore } from "@/lib/store";
 import { cn } from "@/lib/utils/cn";
 import { StatusDot } from "@/components/deck/StatusDot";
 import { NAV_ITEMS } from "@/lib/nav";
@@ -37,17 +37,17 @@ function Wordmark() {
 
 function ConnectionFooter() {
   const connection = useAppStore((s) => s.connection);
-  const modelVersion = useAppStore((s) => s.modelVersion);
+  const modelVersion = useAppStore((s) => s.assessments[0]?.modelVersion);
 
-  const tone = connection === "live" ? "healthy" : connection === "simulated" ? "elevated" : connection === "offline" ? "critical" : "neutral";
-  const label = connection === "live" ? "Live" : connection === "simulated" ? "Simulated" : connection === "offline" ? "Offline" : "Connecting";
+  const tone = connection.status === "live" ? "healthy" : connection.status === "simulated" ? "elevated" : connection.status === "offline" ? "critical" : "neutral";
+  const label = connection.status === "live" ? "Live" : connection.status === "simulated" ? "Simulated" : connection.status === "offline" ? "Offline" : "Connecting";
 
   return (
     <div className="border-t border-hairline p-3">
       <div className="rounded-lg border border-hairline bg-overlay/60 p-3">
         <div className="flex items-center justify-between">
           <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-ink-3">Model status</p>
-          <StatusDot tone={tone} pulse={connection === "live"} size="sm" />
+          <StatusDot tone={tone} pulse={connection.status === "live"} size="sm" />
         </div>
         <p className="mt-1.5 font-mono text-xs text-ink">
           {label}

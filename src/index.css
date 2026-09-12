@@ -19,6 +19,7 @@
   --color-status-elevated: #f59e0b;
   --color-status-critical: #ef4444;
   --color-status-info: #38bdf8;
+  --color-status-high: #fb923c;
 
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, "SFMono-Regular", "Menlo", monospace;
