@@ -101,3 +101,27 @@
     }
   }
 }
+
+@layer utilities {
+  /* Deep-canvas atmosphere: faint cyan bloom bleeding off the top + emerald mirror at the floor. */
+  .stage-aurora {
+    background-image:
+      radial-gradient(52rem 24rem at 60% -8rem, rgba(34, 211, 238, 0.10), transparent 66%),
+      radial-gradient(40rem 22rem at 90% 115%, rgba(16, 185, 129, 0.05), transparent 62%),
+      radial-gradient(30rem 18rem at 8% 110%, rgba(56, 189, 248, 0.04), transparent 62%);
+  }
+
+  /* Faint engineering-grid texture, feathered away toward the lower third. */
+  .stage-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+    background-size: 44px 44px;
+    -webkit-mask-image: radial-gradient(90% 74% at 50% 0%, black 30%, transparent 100%);
+    mask-image: radial-gradient(90% 74% at 50% 0%, black 30%, transparent 100%);
+  }
+
+  .hairline-t {
+    border-top: 1px solid var(--color-hairline);
+  }
+}

@@ -1,7 +1,6 @@
 import { Layers } from "lucide-react";
 import { PageHeader } from "@/components/deck/PageHeader";
-import { EmptyState } from "@/components/deck/EmptyState";
-import { Panel } from "@/components/deck/Panel";
+import { ReservedSurface } from "@/components/deck/ReservedSurface";
 
 export function Explain() {
   return (
@@ -9,16 +8,15 @@ export function Explain() {
       <PageHeader
         index="03 / Explain"
         title="Explainability"
-        description="Why the model decided what it decided — SHAP waterfall, contributing features, and condition evidence."
+        description="Why the model decided what it decided — feature attribution, condition evidence, and model metadata."
       />
-      <Panel eyebrow="Scaffold" title="Explainability surface" bodyClassName="p-6">
-        <EmptyState
-          icon={Layers}
-          eyebrow="Phase 6"
-          title="Feature attribution will render here"
-          description="A SHAP waterfall from base_value through each contributing feature, the direction-ranked factor table, per-mode condition-evidence, and model metadata: version, method, latency, prediction ID."
-        />
-      </Panel>
+      <ReservedSurface
+        icon={Layers}
+        index="03"
+        phase="6"
+        title="Feature attribution"
+        description="A SHAP waterfall from the base value through each contributing feature, a direction-ranked factor table, per-mode condition evidence, and model metadata: version, method, latency, and prediction id."
+      />
     </div>
   );
 }

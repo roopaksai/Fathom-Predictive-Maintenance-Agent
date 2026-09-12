@@ -1,7 +1,6 @@
-import { Activity } from "lucide-react";
 import { PageHeader } from "@/components/deck/PageHeader";
-import { EmptyState } from "@/components/deck/EmptyState";
-import { Panel } from "@/components/deck/Panel";
+import { InputTheater } from "@/components/analyze/InputTheater";
+import { ResultStage } from "@/components/analyze/ResultStage";
 
 export function Analyze() {
   return (
@@ -9,16 +8,16 @@ export function Analyze() {
       <PageHeader
         index="02 / Analyze"
         title="Machine analysis workspace"
-        description="What-if telemetry inputs, the live prediction, failure modes, and recommended maintenance."
+        description="Shape the telemetry scenario, run the assessment, and read the verdict back from the model."
       />
-      <Panel eyebrow="Scaffold" title="Analysis surface" bodyClassName="p-6">
-        <EmptyState
-          icon={Activity}
-          eyebrow="Phase 5"
-          title="Telemetry workspace will render here"
-          description="Product-variant and sensor sliders, derived-values readout, failure-probability gauge with decision threshold, failure-mode chips, anomaly panel, and recommendation."
-        />
-      </Panel>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+        <div className="lg:col-span-7">
+          <InputTheater />
+        </div>
+        <div className="lg:col-span-5">
+          <ResultStage />
+        </div>
+      </div>
     </div>
   );
 }

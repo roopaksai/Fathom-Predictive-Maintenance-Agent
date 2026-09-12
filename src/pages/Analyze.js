@@ -1,8 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { Activity } from "lucide-react";
 import { PageHeader } from "@/components/deck/PageHeader";
-import { EmptyState } from "@/components/deck/EmptyState";
-import { Panel } from "@/components/deck/Panel";
+import { InputTheater } from "@/components/analyze/InputTheater";
+import { ResultStage } from "@/components/analyze/ResultStage";
 export function Analyze() {
-    return (_jsxs("div", { className: "flex flex-col gap-6", children: [_jsx(PageHeader, { index: "02 / Analyze", title: "Machine analysis workspace", description: "What-if telemetry inputs, the live prediction, failure modes, and recommended maintenance." }), _jsx(Panel, { eyebrow: "Scaffold", title: "Analysis surface", bodyClassName: "p-6", children: _jsx(EmptyState, { icon: Activity, eyebrow: "Phase 5", title: "Telemetry workspace will render here", description: "Product-variant and sensor sliders, derived-values readout, failure-probability gauge with decision threshold, failure-mode chips, anomaly panel, and recommendation." }) })] }));
+    return (_jsxs("div", { className: "flex flex-col gap-6", children: [_jsx(PageHeader, { index: "02 / Analyze", title: "Machine analysis workspace", description: "Shape the telemetry scenario, run the assessment, and read the verdict back from the model." }), _jsxs("div", { className: "grid grid-cols-1 items-start gap-4 lg:grid-cols-12", children: [_jsx("div", { className: "lg:col-span-7", children: _jsx(InputTheater, {}) }), _jsx("div", { className: "lg:col-span-5", children: _jsx(ResultStage, {}) })] })] }));
 }

@@ -73,8 +73,8 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
           onClick={onNavigate}
           className={({ isActive }) =>
             cn(
-              "group relative flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm transition-colors duration-150",
-              isActive ? "bg-signal-dim/60 text-ink" : "text-ink-2 hover:bg-white/5 hover:text-ink",
+              "group relative flex items-center gap-3 rounded-lg border px-2.5 py-2.5 text-sm transition-colors duration-150",
+              isActive ? "border-signal/20 bg-signal-dim/60 text-ink" : "border-transparent text-ink-2 hover:bg-white/5 hover:text-ink",
             )
           }
         >
@@ -86,7 +86,7 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
                   className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-signal"
                 />
               )}
-              <item.icon className="h-4 w-4 shrink-0" strokeWidth={1.6} />
+              <item.icon className="h-4 w-4 shrink-0 transition-transform duration-150 group-hover:translate-x-[1px]" strokeWidth={1.6} />
               <span className="flex-1 truncate text-[13px] font-medium">{item.label}</span>
               <span
                 className={cn("font-mono text-[10px] tabular-nums", isActive ? "text-signal" : "text-ink-3 group-hover:text-ink-2")}
