@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 import type { Alert, AlertStatus, Assessment, Notification } from "@/lib/types";
 import { uid, clampP } from "@/lib/derived";
 import { severityFromProbability, riskFromProbability } from "@/lib/domain";
-import { APP } from "@/lib/config";
+import { APP, apiBase as readApiBase, useSimulated as readUseSimulated } from "@/lib/config";
 
 export type ConnectionStatus = "checking" | "live" | "simulated" | "offline";
 
@@ -23,6 +23,9 @@ interface AppState {
   setConnection: (c: Connection) => void;
   probe: (p: () => Promise<Connection>) => Promise<void>;
   setSidebarOpen: (open: boolean) => void;
+  clearAssessments: () => void;
+  clearAlerts: () => void;
+  clearData: () => void;
   addAssessment: (a: Assessment) => { alert?: Alert };
   createAlert: (assessmentId: string) => void;
   acknowledgeAlert: (id: string) => void;
@@ -57,12 +60,16 @@ export const useAppStore = create<AppState>()(
       assessments: [],
       alerts: [],
       notifications: [],
-      useSimulated: false,
-      apiBase: APP.defaultApiBase,
+      useSimulated: readUseSimulated(),
+      apiBase: readApiBase(),
       sidebarOpen: false,
 
       setConnection: (c) => set({ connection: c }),
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+
+      clearAssessments: () => set({ assessments: [] }),
+      clearAlerts: () => set({ alerts: [], notifications: [] }),
+      clearData: () => set({ assessments: [], alerts: [], notifications: [] }),
 
       probe: async (probeFn) => {
         const c = await probeFn();
@@ -70,7 +77,8 @@ export const useAppStore = create<AppState>()(
       },
 
       addAssessment: (a) => {
-        const shouldAlert = a.failureProbability >= APP.alertThreshold || a.healthStatus !== "Normal";
+        const severity = severityFromProbability(a.failureProbability);
+        const shouldAlert = severity === "High" || severity === "Critical";
         let alert: Alert | undefined;
         if (shouldAlert) {
           alert = buildAlert(a);

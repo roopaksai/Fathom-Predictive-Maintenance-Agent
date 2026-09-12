@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { uid, clampP } from "@/lib/derived";
 import { severityFromProbability } from "@/lib/domain";
-import { APP } from "@/lib/config";
+import { APP, apiBase as readApiBase, useSimulated as readUseSimulated } from "@/lib/config";
 function buildAlert(a) {
     return {
         id: uid("alert"),
@@ -24,17 +24,21 @@ export const useAppStore = create()(persist((set, get) => ({
     assessments: [],
     alerts: [],
     notifications: [],
-    useSimulated: false,
-    apiBase: APP.defaultApiBase,
+    useSimulated: readUseSimulated(),
+    apiBase: readApiBase(),
     sidebarOpen: false,
     setConnection: (c) => set({ connection: c }),
     setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+    clearAssessments: () => set({ assessments: [] }),
+    clearAlerts: () => set({ alerts: [], notifications: [] }),
+    clearData: () => set({ assessments: [], alerts: [], notifications: [] }),
     probe: async (probeFn) => {
         const c = await probeFn();
         set({ connection: c });
     },
     addAssessment: (a) => {
-        const shouldAlert = a.failureProbability >= APP.alertThreshold || a.healthStatus !== "Normal";
+        const severity = severityFromProbability(a.failureProbability);
+        const shouldAlert = severity === "High" || severity === "Critical";
         let alert;
         if (shouldAlert) {
             alert = buildAlert(a);

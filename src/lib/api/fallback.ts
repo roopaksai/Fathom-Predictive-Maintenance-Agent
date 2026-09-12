@@ -21,25 +21,24 @@ export interface SimulatedData {
   notice: string;
 }
 
-function sig(center: number, n: number, steep = 1): number {
-  return clampP(1 / (1 + Math.exp(-steep * (n - center))));
-}
-
 export function simulateAssessment(input: AssessInput): SimulatedData {
   const d = derive(input);
   const product = PRODUCT_FACTOR[input.productType];
 
-  const twf = sig(200, input.toolWear, 0.055) * (1 + product * 0.6);
-  const hdf = clampP((22 - d.tempDifference) / 24) * (1 + Math.abs(input.processTemp - 310) * 0.004);
-  const pwf = sig(5000, d.mechanicalPower * 1.25, 0.0012) * (1 + product * 0.5);
-  const osf = sig(7600, d.overstrain, 0.00045);
-  const rnf = 0.025;
+  const twf = clampP((input.toolWear - 170) / 85) * (1 + product * 1.2);
+  const hdf = clampP((18 - d.tempDifference) / 26) * (1 + Math.abs(input.processTemp - 310) * 0.008);
+  const pwf = clampP((d.mechanicalPower - 4800) / 5200) * (1 + product * 0.8);
+  const osf = clampP((d.overstrain - 5000) / 11000) * (1 + product * 0.6);
+  const rnf = 0.03;
 
-  const union = Math.min(
-    1,
-    1 - (1 - twf) * (1 - hdf) * (1 - pwf) * (1 - osf) * (1 - rnf),
+  const ranked = [twf, hdf, pwf, osf, rnf].sort((a, b) => b - a);
+  const failureProbability = round(
+    Math.min(
+      clampP(0.72 * ranked[0] + 0.22 * ranked[1] + 0.06 * ranked[2] + 0.02 + product * 0.05),
+      0.96,
+    ),
+    4,
   );
-  const failureProbability = round(clampP(union + 0.03 * product), 4);
 
   const scores: Record<FailureModeCode, number> = {
     TWF: twf,

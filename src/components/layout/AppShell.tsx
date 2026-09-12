@@ -1,8 +1,16 @@
 import { Outlet } from "react-router-dom";
+import { useEffect } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
+import { useAppStore } from "@/lib/store";
+import { probeConnection } from "@/lib/api/provider";
 
 export function AppShell() {
+  const probe = useAppStore((s) => s.probe);
+  useEffect(() => {
+    void probe(probeConnection);
+  }, [probe]);
+
   return (
     <div className="relative min-h-[100dvh] overflow-hidden bg-canvas">
       <div aria-hidden className="stage-aurora pointer-events-none absolute inset-0" />

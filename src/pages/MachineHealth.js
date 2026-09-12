@@ -1,0 +1,56 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { ArrowRight, Cpu, Search } from "lucide-react";
+import { PageHeader } from "@/components/deck/PageHeader";
+import { Panel } from "@/components/deck/Panel";
+import { EmptyState } from "@/components/deck/EmptyState";
+import { Button } from "@/components/deck/Button";
+import { Badge } from "@/components/deck/Badge";
+import { StatusDot } from "@/components/deck/StatusDot";
+import { StatusBadge, toneForStatus } from "@/components/instrument/StatusBadge";
+import { RiskGauge } from "@/components/instrument/RiskGauge";
+import { Sparkline } from "@/components/instrument/Sparkline";
+import { FeatureBars } from "@/components/instrument/FeatureBars";
+import { useAppStore } from "@/lib/store";
+import { derive, fmtNum, fmtPercent, fmtInt, fmtTs } from "@/lib/derived";
+import { machineSummaries } from "@/lib/stats";
+import { cn } from "@/lib/utils/cn";
+export function MachineHealth() {
+    const assessments = useAppStore((s) => s.assessments);
+    const connection = useAppStore((s) => s.connection);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [query, setQuery] = useState("");
+    const summaries = useMemo(() => machineSummaries(assessments), [assessments]);
+    const active = useMemo(() => {
+        const requested = searchParams.get("machine");
+        return summaries.find((m) => m.machineId === requested) ?? summaries[0];
+    }, [summaries, searchParams]);
+    const filtered = useMemo(() => summaries.filter((m) => m.machineId.toLowerCase().includes(query.trim().toLowerCase())), [summaries, query]);
+    const tone = connection.status === "live" ? "healthy" : connection.status === "simulated" ? "elevated" : connection.status === "offline" ? "critical" : "neutral";
+    const connLabel = connection.status === "live" ? "Live" : connection.status === "simulated" ? "Simulated" : connection.status === "offline" ? "Offline" : "Connecting";
+    return (_jsxs("div", { className: "flex flex-col gap-6", children: [_jsx(PageHeader, { index: "03 / Machine Health", title: "Machine health", description: "Per-machine health status, latest failure risk, and signal history for every assessed unit.", right: _jsxs("div", { className: "flex h-9 items-center gap-2.5 rounded-full border border-hairline bg-overlay/70 px-4", children: [_jsx(StatusDot, { tone: tone, pulse: connection.status === "checking" || connection.status === "live", size: "sm" }), _jsx("span", { className: "font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-ink-2", children: connLabel })] }) }), !summaries.length ? (_jsx(EmptyState, { icon: Cpu, eyebrow: "No machines yet", title: "No assessed units to chart", description: "Run your first assessment and this page lists every machine with its health status, latest failure risk, and per-run signal history.", action: _jsx(Link, { to: "/analyze", children: _jsx(Button, { variant: "primary", icon: _jsx(ArrowRight, { className: "h-3.5 w-3.5" }), label: "Run an assessment" }) }) })) : (_jsxs("section", { className: "grid grid-cols-1 gap-4 lg:grid-cols-3", children: [_jsxs(Panel, { title: "Fleet", eyebrow: "Select machine", children: [_jsxs("div", { className: "relative mb-3", children: [_jsx(Search, { className: "pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3", strokeWidth: 1.8 }), _jsx("input", { value: query, onChange: (e) => setQuery(e.target.value), placeholder: "Filter machines\u2026", className: "h-9 w-full rounded-lg border border-hairline bg-overlay/70 pl-8 pr-3 font-mono text-sm tabular-nums text-ink outline-none transition-colors focus:border-signal/60" })] }), _jsxs("ul", { className: "max-h-[420px] space-y-1.5 overflow-y-auto pr-0.5", children: [filtered.map((m) => {
+                                        const isActive = active?.machineId === m.machineId;
+                                        return (_jsx("li", { children: _jsxs("button", { type: "button", onClick: () => setSearchParams({ machine: m.machineId }), className: cn("flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors", isActive ? "border-signal/30 bg-signal-dim/40" : "border-hairline bg-surface/40 hover:bg-white/5"), children: [_jsxs("div", { className: "min-w-0", children: [_jsxs("div", { className: "flex items-center gap-2", children: [_jsx("span", { className: "truncate font-mono text-xs text-ink", children: m.machineId }), _jsx(StatusBadge, { value: m.latest.healthStatus })] }), _jsxs("p", { className: "mt-0.5 font-mono text-[10px] tabular-nums text-ink-3", children: [m.count, " assessment", m.count === 1 ? "" : "s"] })] }), _jsx("span", { className: "shrink-0 font-mono text-sm font-semibold tabular-nums text-ink", children: fmtPercent(m.latest.failureProbability) })] }) }, m.machineId));
+                                    }), !filtered.length && (_jsx("li", { className: "rounded-lg border border-hairline bg-surface/40 px-3 py-2.5 text-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3", children: "No matches" }))] })] }), active && _jsx(MachineDetail, { summary: active })] }))] }));
+}
+function MachineDetail({ summary }) {
+    const latest = summary.latest;
+    const alertTone = toneForStatus(latest.riskLevel);
+    const derived = derive(latest.inputs);
+    const statRows = [
+        { label: "Health status", node: _jsx(StatusBadge, { value: latest.healthStatus }) },
+        { label: "Risk level", node: _jsx(StatusBadge, { value: latest.riskLevel }) },
+        { label: "Priority", node: _jsx(StatusBadge, { value: latest.priority }) },
+        { label: "Decision threshold", node: _jsx("span", { className: "font-mono text-xs tabular-nums text-ink", children: fmtPercent(latest.threshold) }) },
+        ...(latest.anomalyPercentile !== undefined && Number.isFinite(latest.anomalyPercentile)
+            ? [{ label: "Anomaly percentile", node: _jsxs("span", { className: "font-mono text-xs tabular-nums text-ink", children: [fmtNum(latest.anomalyPercentile), "%"] }) }]
+            : []),
+    ];
+    const runnerUps = latest.modes.filter((m) => m.code !== "NONE" && m.code !== latest.mode.code);
+    return (_jsxs("div", { className: "flex flex-col gap-4 lg:col-span-2", children: [_jsx(Panel, { title: summary.machineId, eyebrow: "Latest assessment", right: _jsxs("div", { className: "flex min-w-0 items-center gap-2", children: [_jsx(Badge, { tone: latest.source === "live" ? "signal" : "elevated", children: latest.source === "live" ? "Live" : "Simulated" }), _jsx("span", { className: "shrink-0 font-mono text-[10px] tabular-nums text-ink-3", children: fmtTs(latest.ts, { full: true }) })] }), children: _jsxs("div", { className: "flex flex-col items-center gap-1 py-2 sm:flex-row sm:justify-around", children: [_jsx(RiskGauge, { probability: Number.isFinite(latest.failureProbability) ? latest.failureProbability : 0, size: 190 }), _jsx("div", { className: "w-full max-w-60 space-y-3", children: statRows.map((row, i) => (_jsxs("div", { className: cn("flex items-center justify-between gap-2", i < statRows.length - 1 && "border-b border-hairline pb-2"), children: [_jsx("span", { className: "text-[11px] text-ink-2", children: row.label }), row.node] }, row.label))) })] }) }), _jsx(Panel, { title: "Failure mode", eyebrow: "Predicted class", children: _jsxs("div", { className: "space-y-3", children: [_jsxs("div", { className: "flex items-center justify-between gap-2 rounded-lg border border-hairline bg-surface/50 px-3.5 py-3", children: [_jsx("span", { className: "truncate text-sm font-medium text-ink", children: latest.mode.name }), _jsx(Badge, { tone: latest.mode.code === "NONE" ? "healthy" : alertTone, className: "shrink-0", children: latest.mode.code === "NONE" ? "Nominal" : latest.mode.code })] }), latest.mode.confidence !== undefined && (_jsxs("p", { className: "text-[11px] text-ink-3", children: ["Confidence ", fmtPercent(latest.mode.confidence)] })), runnerUps.length > 0 && (_jsxs("div", { className: "space-y-1.5", children: [_jsx("p", { className: "font-mono text-[9px] uppercase tracking-[0.16em] text-ink-3", children: "Runner-up modes" }), runnerUps.slice(0, 3).map((m) => (_jsxs("div", { className: "flex items-center justify-between text-[12px]", children: [_jsx("span", { className: "truncate text-ink-2", children: m.name }), _jsx("span", { className: "shrink-0 font-mono tabular-nums text-ink-3", children: m.probability !== undefined ? fmtPercent(m.probability) : m.confidence !== undefined ? fmtPercent(m.confidence) : "" })] }, m.code)))] }))] }) }), _jsx(Panel, { title: "Derived parameters", eyebrow: "Computed", children: _jsx("div", { className: "grid grid-cols-3 gap-3", children: [
+                        { sym: "ΔT", name: "Process − Air", value: fmtNum(derived.tempDifference, 1), unit: "K" },
+                        { sym: "P", name: "Mech power", value: fmtInt(derived.mechanicalPower), unit: "W" },
+                        { sym: "TS", name: "Overstrain", value: fmtInt(derived.overstrain), unit: "W·min" },
+                    ].map((c) => (_jsxs("div", { className: "rounded-lg border border-hairline bg-surface/50 px-2.5 py-2.5", children: [_jsxs("p", { className: "font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3", children: [c.sym, " \u00B7 ", c.name] }), _jsxs("p", { className: "mt-1 font-mono text-sm font-semibold tabular-nums text-ink", children: [c.value, " ", _jsx("span", { className: "text-[10px] font-normal text-ink-3", children: c.unit })] })] }, c.sym))) }) }), _jsx(Panel, { title: "Risk trend", eyebrow: `${summary.machineId} · p(failure)`, children: summary.count >= 2 ? (_jsxs("div", { className: "flex h-full min-h-36 flex-col justify-end", children: [_jsx(Sparkline, { values: summary.trend.map((a) => a.failureProbability).filter((v) => Number.isFinite(v)), stroke: "var(--color-signal)", className: "w-full" }), _jsxs("div", { className: "mt-2 flex justify-between font-mono text-[10px] tabular-nums text-ink-3", children: [_jsxs("span", { children: [summary.count, " assessments"] }), _jsx("span", { children: "0\u2013100%" })] })] })) : (_jsx("p", { className: "text-[13px] text-ink-2", children: "Run a second assessment on this machine to plot a trend." })) }), _jsx(Panel, { title: "Contributing features", eyebrow: "Signal attribution", children: latest.contributing.length ? (_jsx(FeatureBars, { features: latest.contributing })) : (_jsx("p", { className: "text-[13px] text-ink-2", children: "No signal attribution returned for this run." })) })] }));
+}
