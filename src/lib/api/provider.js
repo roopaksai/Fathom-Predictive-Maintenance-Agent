@@ -116,7 +116,7 @@ function buildAssessment(input, data, source) {
                         : riskFromProbability(probability))
         : riskFromProbability(probability);
     const primary = data.modes.find((m) => m.code !== "NONE");
-    const modeCode = primary?.code ?? "NONE";
+    const modeCode = (primary?.code ?? "NONE");
     const modeName = primary?.name ?? FAILURE_MODES.NONE.name;
     const mode = { code: modeCode, name: modeName, probability: primary?.probability, confidence: primary?.confidence, note: primary?.note };
     const evidence = data.evidence.length

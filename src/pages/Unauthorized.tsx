@@ -10,9 +10,9 @@ export function UnauthorizedPage() {
       eyebrow="403"
       title="Access Denied"
       description="You don't have permission to access this resource. Your role doesn't include the required privileges."
-      actions={
+      action={
         <div className="flex gap-3">
-          <Button variant="outline" asChild>
+          <Button variant="secondary" asChild>
             <Link to="/overview">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Dashboard

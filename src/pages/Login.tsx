@@ -43,7 +43,7 @@ export function LoginPage() {
 
         <Panel className="p-6">
           <PageHeader
-            eyebrow="Authentication"
+            index="Authentication"
             title="Sign in to continue"
             description="Enter your credentials to access the dashboard"
           />
@@ -100,7 +100,7 @@ export function LoginPage() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full" size="lg" loading={loading} loadingText="Signing in…">
+            <Button type="submit" className="w-full" size="md" loading={loading} loadingText="Signing in…">
               Sign in
             </Button>
           </form>
