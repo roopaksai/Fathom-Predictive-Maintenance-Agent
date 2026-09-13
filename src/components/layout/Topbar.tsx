@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ArrowRight, BellRing, Menu, Search, SearchX, Sun, Moon, LogOut, User } from "lucide-react";
+import { ArrowRight, BellRing, Menu, Search, SearchX, Sun, Moon } from "lucide-react";
 import { useAppStore, type ConnectionStatus } from "@/lib/store";
-import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { cn } from "@/lib/utils/cn";
 import { StatusDot } from "@/components/deck/StatusDot";
 import { NAV_ITEMS } from "@/lib/nav";
 import { fmtTs } from "@/lib/derived";
-import { Button } from "@/components/deck/Button";
 
 function useUtcClock() {
   const [now, setNow] = useState(() => new Date());
@@ -87,7 +85,7 @@ function CommandSearch({ navigate, onClose }: { navigate: ReturnType<typeof useN
           ) : (
             <div className="flex items-center gap-2.5 px-3 py-3 text-[12px] text-ink-3">
               <SearchX className="h-3.5 w-3.5" strokeWidth={1.6} />
-              No module matches “{q}”
+              No module matches "{q}"
             </div>
           )}
         </div>
@@ -172,62 +170,12 @@ function ThemeToggle() {
   );
 }
 
-function UserMenu() {
-  const { user, logout } = useAuth();
-  const [open, setOpen] = useState(false);
-  const boxRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: globalThis.MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const handleLogout = async () => {
-    setOpen(false);
-    await logout();
-  };
-
-  return (
-    <div ref={boxRef} className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        aria-label="User menu"
-        className="flex h-9 items-center gap-2 rounded-lg border border-hairline bg-overlay/70 px-3 text-ink-2 transition-colors hover:border-hairline-strong hover:text-ink"
-      >
-        <User className="h-4 w-4" />
-        <span className="hidden font-medium text-sm sm:inline">{user?.full_name || user?.email}</span>
-        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3 capitalize">{user?.role}</span>
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1.5 w-48 overflow-hidden rounded-xl border border-hairline bg-surface shadow-[0_18px_50px_-18px_rgba(0,0,0,0.85)]">
-          <div className="border-b border-hairline px-4 py-2.5">
-            <p className="font-medium text-sm text-ink">{user?.full_name}</p>
-            <p className="font-mono text-[10px] text-ink-3">{user?.email}</p>
-            <span className="inline-block mt-1 px-2 py-0.5 rounded bg-signal-cyan/10 text-signal-cyan font-mono text-[9px] uppercase tracking-[0.1em]">{user?.role}</span>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-ink-2 hover:bg-white/5 hover:text-ink"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function Topbar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const connection = useAppStore((s) => s.connection);
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const now = useUtcClock();
-  const { user } = useAuth();
 
   const current = useMemo(() => NAV_ITEMS.find((n) => pathname.startsWith(n.to)) ?? NAV_ITEMS[0], [pathname]);
   const meta = CONNECTION_META[connection.status];
@@ -259,7 +207,6 @@ export function Topbar() {
           </div>
           <ThemeToggle />
           <NotificationsBell />
-          {user && <UserMenu />}
         </div>
       </div>
     </header>

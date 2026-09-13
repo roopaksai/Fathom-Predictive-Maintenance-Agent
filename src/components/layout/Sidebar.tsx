@@ -2,10 +2,9 @@ import { NavLink } from "react-router-dom";
 import { motion } from "framer-motion";
 import { TriangleAlert, X } from "lucide-react";
 import { useAppStore } from "@/lib/store";
-import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils/cn";
 import { StatusDot } from "@/components/deck/StatusDot";
-import { NAV_ITEMS, filterNavItemsByRole } from "@/lib/nav";
+import { NAV_ITEMS } from "@/lib/nav";
 
 function Wordmark() {
   return (
@@ -64,22 +63,10 @@ function ConnectionFooter() {
 }
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
-  const { user } = useAuth();
-  const items = user ? filterNavItemsByRole(user.role) : [];
-
-  if (items.length === 0) {
-    return (
-      <nav className="flex-1 space-y-1 px-3" aria-label="Primary">
-        <p className="px-2 pb-1 pt-4 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-3">Workbench</p>
-        <div className="text-center text-ink-3 py-8 text-sm">No modules available for your role</div>
-      </nav>
-    );
-  }
-
   return (
     <nav className="flex-1 space-y-1 px-3" aria-label="Primary">
       <p className="px-2 pb-1 pt-4 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-3">Workbench</p>
-      {items.map((item) => (
+      {NAV_ITEMS.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}
