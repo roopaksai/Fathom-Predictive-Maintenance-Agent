@@ -1,55 +1,124 @@
-# Fathom — Predictive Maintenance Agent
+# Fathom Predictive Maintenance Agent - Frontend
 
-A dark, industrial "command-center" frontend for a predictive-maintenance demo. It drives a shared Gradio space running a PMI-failure classification baseline, explains every prediction, and maintains an honest local history of every assessment you run.
+React 19 + Vite 8 + TypeScript 7 + Tailwind v4
+
+## Quick Start
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Configure API base (optional - defaults to localhost:8000)
+cp .env.example .env
+# Edit .env if backend runs elsewhere
+
+# 3. Start development server
+npm run dev
+```
+
+Runs at `http://localhost:5173`
+
+## Build for Production
+
+```bash
+npm run build
+# Output in dist/
+```
+
+## Preview Production Build
+
+```bash
+npm run preview
+```
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_API_BASE` | `http://localhost:8000` | Backend API URL |
+
+## Tech Stack
+
+- **React 19** - UI framework
+- **Vite 8** - Build tool
+- **TypeScript 7** - Type safety
+- **Tailwind v4** - Styling
+- **React Router 7** - Routing
+- **Zustand** - State management
+- **Framer Motion** - Animations
+- **Lucide React** - Icons
+- **Recharts** - Charts
+- **@radix-ui/react-slot** - Button asChild
 
 ## Pages
 
-| Route | Module |
-| --- | --- |
-| `/overview` | Fleet dashboard — health summary, risk gauge, distribution, trend, attention, recent alerts + predictions |
-| `/analyze` | Machine risk assessment — 6 sensor inputs + product type, one-click run |
-| `/machines` | Per-machine health, latest risk, signal trend |
-| `/alerts` | Alert center — file/acknowledge/resolve lifecycle |
-| `/history` | Full prediction history with filters and risk trend |
-| `/insights` | SHAP-style attribution + plain-language explanation of a chosen assessment |
-| `/settings` | Connection, data controls, honesty & calibration notes |
+1. **Dashboard** (`/overview`) - Fleet metrics, risk gauge, distribution, trends
+2. **Analyze** (`/analyze`) - Machine assessment input + results
+3. **Machine Health** (`/machines`) - Per-machine health (supervisor+)
+4. **Alert Center** (`/alerts`) - Alert management with acknowledge/resolve
+5. **History** (`/history`) - Filterable assessment log
+6. **Insights** (`/insights`) - AI explainability (supervisor+)
+7. **Settings** (`/settings`) - Theme, API config, data (admin)
 
-## How it works
+## Authentication
 
-1. **Live first** — `POST /gradio_api/call/assess` streams via SSE to an assessment endpoint (`src/lib/api/gradio.ts`).
-2. **Honest fallback** — if the backend is unreachable or its ZeroGPU quota is exhausted, a deterministic physics engine (`src/lib/api/fallback.ts`) takes over. Every result is labeled `Live model` or `Simulated`; the sidebar/topbar show the connection state.
-3. **No invented data** — assessments are persisted to `localStorage` (zustand `persist`). Every machine, alert, trend, and insight derives from assessments actually run in this browser. The data panels in Settings clear it all.
+- JWT httpOnly cookies
+- Roles: `admin`, `supervisor`, `worker`
+- Login at `/login`
+- Protected routes redirect to login
 
-## Configuration
+## Deployment
 
-The default backend is configured in `src/lib/config.ts`:
-
-```
-DEFAULT_API_BASE = "https://vvsgyuv123-predictive-maintenance-demo.hf.space"
-```
-
-It expects a Gradio 4+ app exposing `/gradio_api` with a `call/assess` routine accepting:
-
-```
-productType (L/M/H), airTemp, processTemp, speed, torque, toolWear, machineId, state
-```
-
-Options:
-
-- Set `VITE_API_BASE` to point the app at a different Gradio instance at build time.
-- In-app, the Settings page edits the API base, forces the simulated engine, and re-checks connectivity at runtime.
-
-## Develop
-
+### Vercel (recommended)
 ```bash
-npm install
-npm run dev      # http://localhost:5173
-npm run build    # tsc -b && vite build → dist/
-npm run preview  # serve the production build locally
+vercel --prod
+```
+Set `VITE_API_BASE` in Vercel dashboard.
+
+### Docker
+```dockerfile
+FROM node:22-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+EXPOSE 5173
+CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "5173"]
 ```
 
-`vercel.json` ships an SPA rewrite and long-lived asset caching for Vercel deploys.
+## Project Structure
 
-## Honesty & scope
+```
+src/
+├── components/
+│   ├── deck/          # UI components (Button, Panel, Badge, etc.)
+│   ├── instrument/    # Charts (RiskGauge, Sparkline, etc.)
+│   └── layout/        # AppShell, Sidebar, Topbar
+├── context/
+│   ├── AuthContext.tsx    # Auth state + login/logout
+│   └── ThemeContext.tsx   # Light/dark theme
+├── hooks/
+│   ├── use-analyze.ts     # Assessment runner
+│   └── use-machines.ts    # Machine/assessment/alert data fetching
+├── lib/
+│   ├── api/
+│   │   ├── client.ts      # FastAPI client
+│   │   ├── provider.ts    # Predict chain (FastAPI → Gradio → Simulated)
+│   │   └── fallback.ts    # Simulated physics engine
+│   ├── store/             # Zustand stores
+│   ├── types.ts           # TypeScript types
+│   ├── domain.ts          # Failure modes, risk mapping
+│   ├── derived.ts         # Formulas, formatters
+│   ├── stats.ts           # Fleet summaries
+│   ├── config.ts          # App config
+│   ├── nav.ts             # Navigation (RBAC-aware)
+│   └── utils/cn.ts        # Classname helper
+├── pages/                 # 7 page components
+├── App.tsx                # Routes + RBAC guards
+└── main.tsx               # Entry + providers
+```
 
-Failure probabilities and health classifications are **decision-support only** and are not certified predictions. Where a live model cannot be reached, the simulated engine is deterministic and clearly badged — it exists so the demo never breaks, not to imitate the model's calibration.
+## License
+
+Internal use only.
