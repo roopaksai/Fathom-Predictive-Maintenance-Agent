@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Check, Siren, Wrench } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { Check, Siren, Wrench, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/deck/PageHeader";
 import { Panel } from "@/components/deck/Panel";
 import { Badge } from "@/components/deck/Badge";
@@ -7,9 +7,11 @@ import { Button } from "@/components/deck/Button";
 import { StatCard } from "@/components/instrument/StatCard";
 import { StatusBadge } from "@/components/instrument/StatusBadge";
 import { useAppStore } from "@/lib/store";
+import { useAuth } from "@/context/AuthContext";
 import { APP } from "@/lib/config";
 import { fmtPercent, fmtTs } from "@/lib/derived";
 import { cn } from "@/lib/utils/cn";
+import { useAlerts } from "@/hooks/use-machines";
 import type { AlertStatus, Severity } from "@/lib/types";
 
 const SEVERITY_FILTERS = ["All", "Critical", "High", "Warning"] as const;
@@ -18,7 +20,7 @@ const STATUS_FILTERS = ["All", "Open", "Acknowledged", "Resolved"] as const;
 type SeverityFilter = (typeof SEVERITY_FILTERS)[number];
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
-const SEVERITY_DOT: Record<Severity, string> = {
+const SEVERITY_DOT: Record<string, string> = {
   Critical: "text-status-critical",
   High: "text-status-high",
   Warning: "text-status-elevated",
@@ -54,27 +56,40 @@ function SegmentedFilter<T extends string>({
 }
 
 export function AlertCenter() {
-  const alerts = useAppStore((s) => s.alerts);
-  const acknowledgeAlert = useAppStore((s) => s.acknowledgeAlert);
-  const resolveAlert = useAppStore((s) => s.resolveAlert);
-
+  const { user, hasRole } = useAuth();
+  const { alerts: backendAlerts, loading, error, refetch } = useAlerts();
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("All");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [query, setQuery] = useState("");
+  const [acknowledging, setAcknowledging] = useState<Set<string>>(new Set());
+  const [resolving, setResolving] = useState<Set<string>>(new Set());
 
-  const openCount = useMemo(() => alerts.filter((a) => a.status === "Open").length, [alerts]);
+  // Merge local and backend alerts
+  const localAlerts = useAppStore((s) => s.alerts);
+  const allAlerts = useMemo(() => {
+    const merged = [...backendAlerts, ...localAlerts];
+    // Deduplicate by assessmentId
+    const seen = new Set<string>();
+    return merged.filter((a) => {
+      if (seen.has(a.assessmentId)) return false;
+      seen.add(a.assessmentId);
+      return true;
+    });
+  }, [backendAlerts, localAlerts]);
+
+  const openCount = useMemo(() => allAlerts.filter((a) => a.status === "Open").length, [allAlerts]);
   const acknowledgedCount = useMemo(
-    () => alerts.filter((a) => a.status === "Acknowledged").length,
-    [alerts],
+    () => allAlerts.filter((a) => a.status === "Acknowledged").length,
+    [allAlerts],
   );
   const resolvedCount = useMemo(
-    () => alerts.filter((a) => a.status === "Resolved").length,
-    [alerts],
+    () => allAlerts.filter((a) => a.status === "Resolved").length,
+    [allAlerts],
   );
 
   const filteredAlerts = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return alerts.filter((a) => {
+    return allAlerts.filter((a) => {
       if (severityFilter !== "All" && a.severity !== severityFilter) return false;
       if (statusFilter !== "All" && a.status !== statusFilter) return false;
       if (q && !(a.machineId.toLowerCase().includes(q) || a.modeName.toLowerCase().includes(q))) {
@@ -82,7 +97,43 @@ export function AlertCenter() {
       }
       return true;
     });
-  }, [alerts, severityFilter, statusFilter, query]);
+  }, [allAlerts, severityFilter, statusFilter, query]);
+
+  const acknowledgeAlert = async (id: string) => {
+    setAcknowledging((prev) => new Set(prev).add(id));
+    try {
+      // Try backend first
+      const { api } = await import("@/lib/api/client");
+      await api.acknowledgeAlert(id);
+    } catch {
+      // Fallback to local store
+      useAppStore.getState().acknowledgeAlert(id);
+    } finally {
+      setAcknowledging((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      refetch();
+    }
+  };
+
+  const resolveAlert = async (id: string) => {
+    setResolving((prev) => new Set(prev).add(id));
+    try {
+      const { api } = await import("@/lib/api/client");
+      await api.resolveAlert(id);
+    } catch {
+      useAppStore.getState().resolveAlert(id);
+    } finally {
+      setResolving((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      refetch();
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -91,11 +142,22 @@ export function AlertCenter() {
         title="Alert center"
         description="Every filed alert — open, acknowledged, and resolved — with the evidence and recommended action from the originating assessment."
         right={
-          <Badge tone={openCount > 0 ? "critical" : "healthy"}>
-            {openCount} open
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge tone={openCount > 0 ? "critical" : "healthy"}>
+              {openCount} open
+            </Badge>
+            <Button variant="ghost" size="sm" icon={<RefreshCw className="h-3.5 w-3.5" />} onClick={refetch} loading={loading}>
+              Refresh
+            </Button>
+          </div>
         }
       />
+
+      {error && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive text-sm">
+          Failed to load alerts: {error}
+        </div>
+      )}
 
       <section aria-label="Alert summary" className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:gap-4">
         <StatCard label="Open" value={String(openCount)} unit="awaiting action" tone={openCount > 0 ? "critical" : "neutral"} />
@@ -128,8 +190,8 @@ export function AlertCenter() {
         </div>
       </Panel>
 
-      <Panel title="Filed alerts" eyebrow={`${filteredAlerts.length} of ${alerts.length}`}>
-        {alerts.length === 0 ? (
+      <Panel title="Filed alerts" eyebrow={`${filteredAlerts.length} of ${allAlerts.length}`}>
+        {allAlerts.length === 0 && !loading ? (
           <div className="flex min-h-40 flex-col items-center justify-center gap-2.5 text-center">
             <Siren className="h-6 w-6 text-ink-3" strokeWidth={1.4} />
             <div>
@@ -184,6 +246,7 @@ export function AlertCenter() {
                         icon={<Check className="h-3.5 w-3.5" />}
                         label="Acknowledge"
                         onClick={() => acknowledgeAlert(a.id)}
+                        loading={acknowledging.has(a.id)}
                       />
                     )}
                     {(a.status === "Open" || a.status === "Acknowledged") && (
@@ -193,6 +256,7 @@ export function AlertCenter() {
                         icon={<Check className="h-3.5 w-3.5" />}
                         label="Resolve"
                         onClick={() => resolveAlert(a.id)}
+                        loading={resolving.has(a.id)}
                       />
                     )}
                     {a.status === "Resolved" && <Badge tone="healthy">Resolved</Badge>}

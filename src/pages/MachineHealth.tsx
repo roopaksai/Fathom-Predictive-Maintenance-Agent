@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowRight, Cpu, Search } from "lucide-react";
+import { ArrowRight, Cpu, Search, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/deck/PageHeader";
 import { Panel } from "@/components/deck/Panel";
 import { EmptyState } from "@/components/deck/EmptyState";
@@ -14,15 +14,18 @@ import { FeatureBars } from "@/components/instrument/FeatureBars";
 import { useAppStore } from "@/lib/store";
 import { derive, fmtNum, fmtPercent, fmtInt, fmtTs } from "@/lib/derived";
 import { machineSummaries } from "@/lib/stats";
+import { useMachines, useAssessments } from "@/hooks/use-machines";
 import { cn } from "@/lib/utils/cn";
 
 type MachineSummary = ReturnType<typeof machineSummaries>[number];
 
 export function MachineHealth() {
-  const assessments = useAppStore((s) => s.assessments);
   const connection = useAppStore((s) => s.connection);
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState("");
+
+  const { machines, loading: machinesLoading, error: machinesError, refetch: refetchMachines } = useMachines();
+  const { assessments, loading: assessmentsLoading, error: assessmentsError, refetch: refetchAssessments } = useAssessments();
 
   const summaries = useMemo(() => machineSummaries(assessments), [assessments]);
 
@@ -46,14 +49,31 @@ export function MachineHealth() {
         title="Machine health"
         description="Per-machine health status, latest failure risk, and signal history for every assessed unit."
         right={
-          <div className="flex h-9 items-center gap-2.5 rounded-full border border-hairline bg-overlay/70 px-4">
-            <StatusDot tone={tone} pulse={connection.status === "checking" || connection.status === "live"} size="sm" />
-            <span className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-ink-2">{connLabel}</span>
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 items-center gap-2.5 rounded-full border border-hairline bg-overlay/70 px-4">
+              <StatusDot tone={tone} pulse={connection.status === "checking" || connection.status === "live"} size="sm" />
+              <span className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-ink-2">{connLabel}</span>
+            </div>
+            <Button variant="ghost" size="sm" icon={<RefreshCw className="h-3.5 w-3.5" />} onClick={() => { refetchMachines(); refetchAssessments(); }}>
+              Refresh
+            </Button>
           </div>
         }
       />
 
-      {!summaries.length ? (
+      {machinesError && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive text-sm">
+          Failed to load machines: {machinesError}
+        </div>
+      )}
+
+      {assessmentsError && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive text-sm">
+          Failed to load assessments: {assessmentsError}
+        </div>
+      )}
+
+      {!summaries.length && !machinesLoading && !assessmentsLoading ? (
         <EmptyState
           icon={Cpu}
           eyebrow="No machines yet"
@@ -68,50 +88,58 @@ export function MachineHealth() {
       ) : (
         <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Panel title="Fleet" eyebrow="Select machine">
-            <div className="relative mb-3">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3" strokeWidth={1.8} />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Filter machines…"
-                className="h-9 w-full rounded-lg border border-hairline bg-overlay/70 pl-8 pr-3 font-mono text-sm tabular-nums text-ink outline-none transition-colors focus:border-signal/60"
-              />
-            </div>
-            <ul className="max-h-[420px] space-y-1.5 overflow-y-auto pr-0.5">
-              {filtered.map((m) => {
-                const isActive = active?.machineId === m.machineId;
-                return (
-                  <li key={m.machineId}>
-                    <button
-                      type="button"
-                      onClick={() => setSearchParams({ machine: m.machineId })}
-                      className={cn(
-                        "flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors",
-                        isActive ? "border-signal/30 bg-signal-dim/40" : "border-hairline bg-surface/40 hover:bg-white/5",
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate font-mono text-xs text-ink">{m.machineId}</span>
-                          <StatusBadge value={m.latest.healthStatus} />
-                        </div>
-                        <p className="mt-0.5 font-mono text-[10px] tabular-nums text-ink-3">
-                          {m.count} assessment{m.count === 1 ? "" : "s"}
-                        </p>
-                      </div>
-                      <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-ink">
-                        {fmtPercent(m.latest.failureProbability)}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-              {!filtered.length && (
-                <li className="rounded-lg border border-hairline bg-surface/40 px-3 py-2.5 text-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
-                  No matches
-                </li>
-              )}
-            </ul>
+            {machinesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-2 border-signal-cyan border-t-transparent" />
+              </div>
+            ) : (
+              <>
+                <div className="relative mb-3">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3" strokeWidth={1.8} />
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Filter machines…"
+                    className="h-9 w-full rounded-lg border border-hairline bg-overlay/70 pl-8 pr-3 font-mono text-sm tabular-nums text-ink outline-none transition-colors focus:border-signal/60"
+                  />
+                </div>
+                <ul className="max-h-[420px] space-y-1.5 overflow-y-auto pr-0.5">
+                  {filtered.map((m) => {
+                    const isActive = active?.machineId === m.machineId;
+                    return (
+                      <li key={m.machineId}>
+                        <button
+                          type="button"
+                          onClick={() => setSearchParams({ machine: m.machineId })}
+                          className={cn(
+                            "flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors",
+                            isActive ? "border-signal/30 bg-signal-dim/40" : "border-hairline bg-surface/40 hover:bg-white/5",
+                          )}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate font-mono text-xs text-ink">{m.machineId}</span>
+                              <StatusBadge value={m.latest.healthStatus} />
+                            </div>
+                            <p className="mt-0.5 font-mono text-[10px] tabular-nums text-ink-3">
+                              {m.count} assessment{m.count === 1 ? "" : "s"}
+                            </p>
+                          </div>
+                          <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-ink">
+                            {fmtPercent(m.latest.failureProbability)}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                  {!filtered.length && (
+                    <li className="rounded-lg border border-hairline bg-surface/40 px-3 py-2.5 text-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
+                      No matches
+                    </li>
+                  )}
+                </ul>
+              </>
+            )}
           </Panel>
 
           {active && <MachineDetail summary={active} />}
@@ -145,7 +173,9 @@ function MachineDetail({ summary }: { summary: MachineSummary }) {
         eyebrow="Latest assessment"
         right={
           <div className="flex min-w-0 items-center gap-2">
-            <Badge tone={latest.source === "live" ? "signal" : "elevated"}>{latest.source === "live" ? "Live" : "Simulated"}</Badge>
+            <Badge tone={latest.source === "live" ? "signal" : "elevated"}>
+              {latest.source === "live" ? "Live" : "Simulated"}
+            </Badge>
             <span className="shrink-0 font-mono text-[10px] tabular-nums text-ink-3">{fmtTs(latest.ts, { full: true })}</span>
           </div>
         }

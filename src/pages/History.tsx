@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, History, RotateCcw } from "lucide-react";
+import { ArrowRight, History, RotateCw, RotateCcw, RefreshCw, Download } from "lucide-react";
 import { PageHeader } from "@/components/deck/PageHeader";
 import { Panel } from "@/components/deck/Panel";
 import { Badge } from "@/components/deck/Badge";
@@ -11,6 +11,8 @@ import { StatusBadge } from "@/components/instrument/StatusBadge";
 import { useAppStore } from "@/lib/store";
 import { fmtPercent, fmtTs } from "@/lib/derived";
 import { machineSummaries, trendSeries } from "@/lib/stats";
+import { useAssessments } from "@/hooks/use-machines";
+import { cn } from "@/lib/utils/cn";
 
 const RISK_OPTIONS = ["Low", "Medium", "High", "Critical"] as const;
 const MODE_OPTIONS = ["TWF", "HDF", "PWF", "OSF", "RNF"] as const;
@@ -26,11 +28,8 @@ function probColor(p: number): string {
 }
 
 export function HistoryPage() {
-  const assessments = useAppStore((s) => s.assessments);
-
-  const machines = useMemo(() => machineSummaries(assessments).map((m) => m.machineId), [assessments]);
-  const trend = useMemo(() => trendSeries(assessments), [assessments]);
-
+  const localAssessments = useAppStore((s) => s.assessments);
+  const { assessments: backendAssessments, loading, error, refetch } = useAssessments({ page_size: 100 });
   const [query, setQuery] = useState("");
   const [machine, setMachine] = useState("all");
   const [risk, setRisk] = useState("all");
@@ -38,9 +37,23 @@ export function HistoryPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
+  // Merge local and backend assessments
+  const allAssessments = useMemo(() => {
+    const merged = [...backendAssessments, ...localAssessments];
+    const seen = new Set<string>();
+    return merged.filter((a) => {
+      if (seen.has(a.id)) return false;
+      seen.add(a.id);
+      return true;
+    });
+  }, [backendAssessments, localAssessments]);
+
+  const machines = useMemo(() => machineSummaries(allAssessments).map((m) => m.machineId), [allAssessments]);
+  const trend = useMemo(() => trendSeries(allAssessments), [allAssessments]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return assessments.filter((a) => {
+    return allAssessments.filter((a) => {
       if (q) {
         const hay = `${a.inputs.machineId} ${a.mode.name} ${a.mode.code}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -55,7 +68,7 @@ export function HistoryPage() {
       if (dateTo && day > dateTo) return false;
       return true;
     });
-  }, [assessments, query, machine, risk, mode, dateFrom, dateTo]);
+  }, [allAssessments, query, machine, risk, mode, dateFrom, dateTo]);
 
   const resetFilters = () => {
     setQuery("");
@@ -66,7 +79,7 @@ export function HistoryPage() {
     setDateTo("");
   };
 
-  if (!assessments.length) {
+  if (!allAssessments.length && !loading) {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader
@@ -95,7 +108,20 @@ export function HistoryPage() {
         index="05 / Prediction History"
         title="Prediction history"
         description="Every persisted assessment across the fleet — refilterable by machine, risk level, failure mode, and time window."
+        right={
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" icon={<RefreshCw className="h-3.5 w-3.5" />} onClick={refetch} loading={loading}>
+              Refresh
+            </Button>
+          </div>
+        }
       />
+
+      {error && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive text-sm">
+          Failed to load assessments: {error}
+        </div>
+      )}
 
       <Panel title="Filters" eyebrow="Refine the log">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-8">
@@ -193,7 +219,7 @@ export function HistoryPage() {
                 {fmtTs(trend[0].ts, { full: true })} → {fmtTs(trend[trend.length - 1].ts, { full: true })}
               </span>
               <span>
-                {assessments.length} assessments ·{" "}
+                {allAssessments.length} assessments ·{" "}
                 {fmtPercent(Math.min(...trend.map((t) => t.probability)))}–{fmtPercent(Math.max(...trend.map((t) => t.probability)))}
               </span>
             </div>
@@ -208,7 +234,7 @@ export function HistoryPage() {
         eyebrow="Newest first"
         right={
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
-            {filtered.length} of {assessments.length} assessments
+            {filtered.length} of {allAssessments.length} assessments
           </span>
         }
       >

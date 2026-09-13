@@ -1,4 +1,4 @@
-import type { AssessInput, Assessment } from "@/lib/types";
+import type { AssessInput, Assessment, FailureModeCode } from "@/lib/types";
 import { derive, round, uid } from "@/lib/derived";
 import { healthFromProbability, riskFromProbability, priorityFromProbability, FAILURE_MODES } from "@/lib/domain";
 import { simulateAssessment } from "@/lib/api/fallback";
@@ -134,14 +134,16 @@ function buildAssessment(input: AssessInput, data: any, source: "live" | "simula
   const modeName = primary?.name ?? FAILURE_MODES.NONE.name;
   const mode = { code: modeCode, name: modeName, probability: primary?.probability, confidence: primary?.confidence, note: primary?.note };
 
+  const getMode = (code: FailureModeCode) => FAILURE_MODES[code];
+
   const evidence = data.evidence.length
     ? data.evidence
     : modeCode === "NONE"
       ? ["No condition evidence triggered — all monitored signals within bounds."]
-      : [FAILURE_MODES[modeCode].indicator];
+      : [getMode(modeCode).indicator];
 
   const explanation = data.explanation || (modeCode === "NONE" ? "No dominant degradation driver detected." : `Primary driver: ${evidence[0]}`);
-  const recommendation = data.recommendation || (modeCode === "NONE" ? FAILURE_MODES.NONE.action : FAILURE_MODES[modeCode].action);
+  const recommendation = data.recommendation || (modeCode === "NONE" ? getMode("NONE").action : getMode(modeCode).action);
   const priority = priorityFromProbability(probability);
 
   return {
