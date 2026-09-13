@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { Compass, Lock } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { EmptyState } from "@/components/deck/EmptyState";
@@ -42,30 +42,22 @@ function ProtectedRoute({ allowedRoles, children }: { allowedRoles?: ("admin" | 
   return <>{children}</>;
 }
 
-function PrivateRoutes() {
-  return (
-    <Route element={<AppShell />}>
-      <Route index element={<Navigate to="/overview" replace />} />
-      <Route path="/overview" element={<ProtectedRoute><Overview /></ProtectedRoute>} />
-      <Route path="/analyze" element={<ProtectedRoute><Analyze /></ProtectedRoute>} />
-      <Route path="/machines" element={<ProtectedRoute allowedRoles={["admin", "supervisor"]}><MachineHealth /></ProtectedRoute>} />
-      <Route path="/alerts" element={<ProtectedRoute><AlertCenter /></ProtectedRoute>} />
-      <Route path="/history" element={<ProtectedRoute><HistoryPage /></ProtectedRoute>} />
-      <Route path="/insights" element={<ProtectedRoute allowedRoles={["admin", "supervisor"]}><Insights /></ProtectedRoute>} />
-      <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><SettingsPage /></ProtectedRoute>} />
-      <Route path="*" element={<NotFound />} />
-    </Route>
-  );
-}
-
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/unauthorized" element={<UnauthorizedPage />} />
-        <PrivateRoutes />
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/unauthorized" element={<UnauthorizedPage />} />
+      <Route element={<AppShell />}>
+        <Route index element={<Navigate to="/overview" replace />} />
+        <Route path="/overview" element={<ProtectedRoute><Overview /></ProtectedRoute>} />
+        <Route path="/analyze" element={<ProtectedRoute><Analyze /></ProtectedRoute>} />
+        <Route path="/machines" element={<ProtectedRoute allowedRoles={["admin", "supervisor"]}><MachineHealth /></ProtectedRoute>} />
+        <Route path="/alerts" element={<ProtectedRoute><AlertCenter /></ProtectedRoute>} />
+        <Route path="/history" element={<ProtectedRoute><HistoryPage /></ProtectedRoute>} />
+        <Route path="/insights" element={<ProtectedRoute allowedRoles={["admin", "supervisor"]}><Insights /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><SettingsPage /></ProtectedRoute>} />
+        <Route path="*" element={<NotFound />} />
+      </Route>
+    </Routes>
   );
 }
