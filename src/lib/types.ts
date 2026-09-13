@@ -1,4 +1,4 @@
-export type Source = "live" | "simulated";
+export type Source = "live" | "simulated" | "fastapi" | "gradio";
 
 export type HealthStatus = "Normal" | "Warning" | "High Risk" | "Critical";
 export type RiskLevel = "Low" | "Medium" | "High" | "Critical";

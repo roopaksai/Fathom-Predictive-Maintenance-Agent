@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 import type { Alert, AlertStatus, Assessment, Notification } from "@/lib/types";
 import { uid, clampP } from "@/lib/derived";
 import { severityFromProbability, riskFromProbability } from "@/lib/domain";
-import { APP, apiBase as readApiBase, useSimulated as readUseSimulated } from "@/lib/config";
+import { APP } from "@/lib/config";
 
 export type ConnectionStatus = "checking" | "live" | "simulated" | "offline";
 
@@ -17,8 +17,6 @@ interface AppState {
   assessments: Assessment[];
   alerts: Alert[];
   notifications: Notification[];
-  useSimulated: boolean;
-  apiBase: string;
   sidebarOpen: boolean;
   setConnection: (c: Connection) => void;
   probe: (p: () => Promise<Connection>) => Promise<void>;
@@ -32,8 +30,6 @@ interface AppState {
   resolveAlert: (id: string) => void;
   markNotificationsRead: () => void;
   markNotificationRead: (id: string) => void;
-  setUseSimulated: (v: boolean) => void;
-  setApiBase: (v: string) => void;
 }
 
 function buildAlert(a: Assessment): Alert {
@@ -60,8 +56,6 @@ export const useAppStore = create<AppState>()(
       assessments: [],
       alerts: [],
       notifications: [],
-      useSimulated: readUseSimulated(),
-      apiBase: readApiBase(),
       sidebarOpen: false,
 
       setConnection: (c) => set({ connection: c }),
@@ -140,23 +134,6 @@ export const useAppStore = create<AppState>()(
           notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
         })),
 
-      setUseSimulated: (v) => {
-        try {
-          localStorage.setItem(APP.storageKeys.useSimulated, v ? "1" : "0");
-        } catch {
-          /* ignore */
-        }
-        set({ useSimulated: v });
-      },
-
-      setApiBase: (v) => {
-        try {
-          localStorage.setItem(APP.storageKeys.apiBase, v);
-        } catch {
-          /* ignore */
-        }
-        set({ apiBase: v });
-      },
     }),
     {
       name: "fathom.app.v1",

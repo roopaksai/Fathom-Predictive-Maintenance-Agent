@@ -9,7 +9,7 @@ export function useMachines() {
         setError(null);
         try {
             const data = await api.listMachines();
-            setMachines(data);
+            setMachines(data.items ?? data);
         }
         catch (e) {
             setError(e instanceof Error ? e.message : "Failed to fetch machines");
@@ -42,7 +42,7 @@ export function useAssessments(params) {
         finally {
             setLoading(false);
         }
-    }, [params]);
+    }, [params?.machine_id, params?.page, params?.page_size]);
     useEffect(() => {
         fetch();
     }, [fetch]);
@@ -67,7 +67,7 @@ export function useAlerts(params) {
         finally {
             setLoading(false);
         }
-    }, [params]);
+    }, [params?.machine_id, params?.severity, params?.page, params?.page_size]);
     useEffect(() => {
         fetch();
     }, [fetch]);

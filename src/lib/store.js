@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { uid, clampP } from "@/lib/derived";
 import { severityFromProbability } from "@/lib/domain";
-import { APP, apiBase as readApiBase, useSimulated as readUseSimulated } from "@/lib/config";
 function buildAlert(a) {
     return {
         id: uid("alert"),
@@ -24,8 +23,6 @@ export const useAppStore = create()(persist((set, get) => ({
     assessments: [],
     alerts: [],
     notifications: [],
-    useSimulated: readUseSimulated(),
-    apiBase: readApiBase(),
     sidebarOpen: false,
     setConnection: (c) => set({ connection: c }),
     setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
@@ -93,24 +90,6 @@ export const useAppStore = create()(persist((set, get) => ({
     markNotificationRead: (id) => set((s) => ({
         notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
     })),
-    setUseSimulated: (v) => {
-        try {
-            localStorage.setItem(APP.storageKeys.useSimulated, v ? "1" : "0");
-        }
-        catch {
-            /* ignore */
-        }
-        set({ useSimulated: v });
-    },
-    setApiBase: (v) => {
-        try {
-            localStorage.setItem(APP.storageKeys.apiBase, v);
-        }
-        catch {
-            /* ignore */
-        }
-        set({ apiBase: v });
-    },
 }), {
     name: "fathom.app.v1",
     partialize: (s) => ({

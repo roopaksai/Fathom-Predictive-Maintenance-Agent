@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ArrowRight, BrainCircuit, Check } from "lucide-react";
 import { PageHeader } from "@/components/deck/PageHeader";
 import { Panel } from "@/components/deck/Panel";
@@ -9,7 +9,6 @@ import { EmptyState } from "@/components/deck/EmptyState";
 import { StatCard } from "@/components/instrument/StatCard";
 import { RiskGauge } from "@/components/instrument/RiskGauge";
 import { FeatureBars } from "@/components/instrument/FeatureBars";
-import { StatusBadge, toneForStatus } from "@/components/instrument/StatusBadge";
 import { useAppStore } from "@/lib/store";
 import { FAILURE_MODES } from "@/lib/domain";
 import { derive, fmtInt, fmtNum, fmtPercent, fmtTs } from "@/lib/derived";
@@ -32,6 +31,8 @@ const LABELS: Record<string, string> = {
 
 export function Insights() {
   const assessments = useAppStore((s) => s.assessments);
+  const [searchParams] = useSearchParams();
+  const assessmentId = searchParams.get("assessment");
 
   const spotlight = useMemo(() => {
     return [...assessments].sort((x, y) => {
@@ -41,25 +42,30 @@ export function Insights() {
     });
   }, [assessments]);
 
-  const [selectedId, setSelectedId] = useState<string>(() => spotlight[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState<string>(() => assessmentId ?? spotlight[0]?.id ?? "");
 
   const selected = useMemo<Assessment | undefined>(() => {
+    // Prefer URL param
+    if (assessmentId) {
+      const found = assessments.find((x) => x.id === assessmentId);
+      if (found) return found;
+    }
     const found = assessments.find((x) => x.id === selectedId);
     return found ?? spotlight[0];
-  }, [assessments, selectedId, spotlight]);
+  }, [assessments, selectedId, assessmentId, spotlight]);
 
   const selectable = assessments.slice(0, 12);
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        index="06 / AI Insights"
+        index="05 / AI Insights"
         title="AI insights"
-        description="Plain-language breakdown of the most concerning assessment in the fleet — why the model is worried, which signals drive it, and what to do next."
+        description="Plain-language breakdown of an assessment — why the model is worried, which signals drive it, and what to do next."
         right={
           selectable.length ? (
             <select
-              value={selectedId}
+              value={selected?.id ?? ""}
               onChange={(e) => setSelectedId(e.target.value)}
               aria-label="Select assessment"
               className="h-9 max-w-72 cursor-pointer rounded-lg border border-hairline bg-overlay/70 px-3 font-mono text-[11px] tabular-nums text-ink outline-none transition-colors focus:border-signal/60"
@@ -166,8 +172,8 @@ function InsightsReport({ a }: { a: Assessment }) {
         eyebrow="Selected run"
         right={
           <div className="flex items-center gap-2.5">
-            <Badge tone={a.source === "live" ? "signal" : "elevated"}>
-              {a.source === "live" ? "Live model" : "Simulated"}
+            <Badge tone={a.source === "live" || a.source === "fastapi" ? "signal" : "elevated"}>
+              {a.source === "live" || a.source === "fastapi" ? "Live model" : a.source === "gradio" ? "Gradio fallback" : "Simulated"}
             </Badge>
             <span className="font-mono text-[10px] text-ink-3">{a.modelVersion && <>v{a.modelVersion}</>}</span>
             <span className="hidden font-mono text-[10px] tabular-nums text-ink-3 sm:inline">
@@ -282,9 +288,17 @@ function InsightsReport({ a }: { a: Assessment }) {
         </ol>
       </Panel>
 
-      <Panel title="Recommended action" eyebrow="Next step" right={<StatusBadge value={a.priority} />}>
+      <Panel title="Recommended action" eyebrow="Next step">
         <p className="text-[13.5px] leading-relaxed text-ink-2">{a.recommendation}</p>
       </Panel>
     </>
   );
+}
+
+function toneForStatus(status: string): "healthy" | "elevated" | "high" | "critical" | "signal" | "neutral" {
+  if (status === "Critical") return "critical";
+  if (status === "High Risk" || status === "High") return "high";
+  if (status === "Warning" || status === "Medium") return "elevated";
+  if (status === "Normal" || status === "Low") return "healthy";
+  return "neutral";
 }

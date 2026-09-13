@@ -1,21 +1,23 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowRight, Cpu, Search, RefreshCw } from "lucide-react";
+import { ArrowRight, Cpu, Search, RefreshCw, Plus, Send } from "lucide-react";
 import { PageHeader } from "@/components/deck/PageHeader";
 import { Panel } from "@/components/deck/Panel";
 import { EmptyState } from "@/components/deck/EmptyState";
 import { Button } from "@/components/deck/Button";
-import { Badge } from "@/components/deck/Badge";
-import { StatusDot } from "@/components/deck/StatusDot";
 import { StatusBadge, toneForStatus } from "@/components/instrument/StatusBadge";
 import { RiskGauge } from "@/components/instrument/RiskGauge";
 import { Sparkline } from "@/components/instrument/Sparkline";
 import { FeatureBars } from "@/components/instrument/FeatureBars";
 import { useAppStore } from "@/lib/store";
+import { api } from "@/lib/api/client";
 import { derive, fmtNum, fmtPercent, fmtInt, fmtTs } from "@/lib/derived";
 import { machineSummaries } from "@/lib/stats";
 import { useMachines, useAssessments } from "@/hooks/use-machines";
 import { cn } from "@/lib/utils/cn";
+
+const inputCls =
+  "h-9 w-full rounded-lg border border-hairline bg-overlay/70 px-3 font-mono text-sm tabular-nums text-ink outline-none transition-colors focus:border-signal/60";
 
 type MachineSummary = ReturnType<typeof machineSummaries>[number];
 
@@ -23,6 +25,7 @@ export function MachineHealth() {
   const connection = useAppStore((s) => s.connection);
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState("");
+  const [showAddForm, setShowAddForm] = useState(false);
 
   const { machines, loading: machinesLoading, error: machinesError, refetch: refetchMachines } = useMachines();
   const { assessments, loading: assessmentsLoading, error: assessmentsError, refetch: refetchAssessments } = useAssessments();
@@ -45,21 +48,33 @@ export function MachineHealth() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        index="03 / Machine Health"
+        index="03 / Machines"
         title="Machine health"
-        description="Per-machine health status, latest failure risk, and signal history for every assessed unit."
+        description="Manage machines, update sensor values, and track health predictions over time."
         right={
           <div className="flex items-center gap-2">
             <div className="flex h-9 items-center gap-2.5 rounded-full border border-hairline bg-overlay/70 px-4">
-              <StatusDot tone={tone} pulse={connection.status === "checking" || connection.status === "live"} size="sm" />
-              <span className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-ink-2">{connLabel}</span>
+              <StatusBadge value={connLabel} />
             </div>
+            <Button variant="primary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setShowAddForm(!showAddForm)}>
+              {showAddForm ? "Cancel" : "Add Machine"}
+            </Button>
             <Button variant="ghost" size="sm" icon={<RefreshCw className="h-3.5 w-3.5" />} onClick={() => { refetchMachines(); refetchAssessments(); }}>
               Refresh
             </Button>
           </div>
         }
       />
+
+      {showAddForm && (
+        <AddMachineForm
+          onCreated={() => {
+            setShowAddForm(false);
+            refetchMachines();
+          }}
+          onCancel={() => setShowAddForm(false)}
+        />
+      )}
 
       {machinesError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive text-sm">
@@ -78,7 +93,7 @@ export function MachineHealth() {
           icon={Cpu}
           eyebrow="No machines yet"
           title="No assessed units to chart"
-          description="Run your first assessment and this page lists every machine with its health status, latest failure risk, and per-run signal history."
+          description="Add a machine and run an assessment to see health status, failure risk, and signal history."
           action={
             <Link to="/analyze">
               <Button variant="primary" icon={<ArrowRight className="h-3.5 w-3.5" />} label="Run an assessment" />
@@ -142,14 +157,113 @@ export function MachineHealth() {
             )}
           </Panel>
 
-          {active && <MachineDetail summary={active} />}
+          {active ? (
+            <MachineDetail
+              summary={active}
+              onRefresh={() => { refetchMachines(); refetchAssessments(); }}
+            />
+          ) : (
+            <div className="lg:col-span-2 flex items-center justify-center rounded-lg border border-hairline bg-surface/30 p-12 text-center">
+              <div>
+                <Cpu className="mx-auto h-8 w-8 text-ink-3" strokeWidth={1.4} />
+                <p className="mt-3 text-[13px] text-ink-2">Select a machine from the fleet panel to view details and update sensor values.</p>
+              </div>
+            </div>
+          )}
         </section>
       )}
     </div>
   );
 }
 
-function MachineDetail({ summary }: { summary: MachineSummary }) {
+function AddMachineForm({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
+  const [form, setForm] = useState({ machine_id: "", name: "", type: "", location: "" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.machine_id || !form.name) {
+      setError("Machine ID and Name are required");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await api.createMachine({
+        machine_id: form.machine_id,
+        name: form.name,
+        type: form.type || undefined,
+        location: form.location || undefined,
+      });
+      onCreated();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create machine");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Panel title="Add new machine" eyebrow="Register a machine">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="block">
+          <span className="mb-1.5 block text-[11px] font-medium text-ink-2">Machine ID *</span>
+          <input
+            value={form.machine_id}
+            onChange={(e) => setForm({ ...form, machine_id: e.target.value })}
+            placeholder="MM-0001"
+            className={inputCls}
+            required
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-[11px] font-medium text-ink-2">Name *</span>
+          <input
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="CNC Lathe A"
+            className={inputCls}
+            required
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-[11px] font-medium text-ink-2">Type</span>
+          <input
+            value={form.type}
+            onChange={(e) => setForm({ ...form, type: e.target.value })}
+            placeholder="CNC, Lathe, Motor…"
+            className={inputCls}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-[11px] font-medium text-ink-2">Location</span>
+          <input
+            value={form.location}
+            onChange={(e) => setForm({ ...form, location: e.target.value })}
+            placeholder="Factory A, Line 3"
+            className={inputCls}
+          />
+        </label>
+        {error && (
+          <div className="sm:col-span-2 lg:col-span-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-destructive text-sm">
+            {error}
+          </div>
+        )}
+        <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
+          <Button type="submit" variant="primary" size="sm" loading={loading}>
+            Create Machine
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </Panel>
+  );
+}
+
+function MachineDetail({ summary, onRefresh }: { summary: MachineSummary; onRefresh: () => void }) {
   const latest = summary.latest;
   const alertTone = toneForStatus(latest.riskLevel);
   const derived = derive(latest.inputs);
@@ -173,9 +287,6 @@ function MachineDetail({ summary }: { summary: MachineSummary }) {
         eyebrow="Latest assessment"
         right={
           <div className="flex min-w-0 items-center gap-2">
-            <Badge tone={latest.source === "live" ? "signal" : "elevated"}>
-              {latest.source === "live" ? "Live" : "Simulated"}
-            </Badge>
             <span className="shrink-0 font-mono text-[10px] tabular-nums text-ink-3">{fmtTs(latest.ts, { full: true })}</span>
           </div>
         }
@@ -199,13 +310,15 @@ function MachineDetail({ summary }: { summary: MachineSummary }) {
         </div>
       </Panel>
 
+      <UpdateSensorsForm machineId={summary.machineId} onUpdated={onRefresh} />
+
       <Panel title="Failure mode" eyebrow="Predicted class">
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2 rounded-lg border border-hairline bg-surface/50 px-3.5 py-3">
             <span className="truncate text-sm font-medium text-ink">{latest.mode.name}</span>
-            <Badge tone={latest.mode.code === "NONE" ? "healthy" : alertTone} className="shrink-0">
+            <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium", alertTone === "healthy" ? "bg-status-healthy/20 text-status-healthy" : alertTone === "high" ? "bg-status-high/20 text-status-high" : alertTone === "critical" ? "bg-status-critical/20 text-status-critical" : "bg-overlay text-ink-2")}>
               {latest.mode.code === "NONE" ? "Nominal" : latest.mode.code}
-            </Badge>
+            </span>
           </div>
           {latest.mode.confidence !== undefined && (
             <p className="text-[11px] text-ink-3">Confidence {fmtPercent(latest.mode.confidence)}</p>
@@ -271,5 +384,81 @@ function MachineDetail({ summary }: { summary: MachineSummary }) {
         )}
       </Panel>
     </div>
+  );
+}
+
+function UpdateSensorsForm({ machineId, onUpdated }: { machineId: string; onUpdated: () => void }) {
+  const [sensors, setSensors] = useState({
+    air_temperature: "",
+    process_temperature: "",
+    rotational_speed: "",
+    torque: "",
+    tool_wear: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccess(false);
+
+    const sensorValues: Record<string, number> = {};
+    for (const [k, v] of Object.entries(sensors)) {
+      if (v) sensorValues[k] = parseFloat(v);
+    }
+
+    try {
+      await api.updateMachine(machineId, { sensor_values: sensorValues });
+      setSuccess(true);
+      setSensors({ air_temperature: "", process_temperature: "", rotational_speed: "", torque: "", tool_wear: "" });
+      onUpdated();
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update sensors");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Panel title="Update sensor values" eyebrow={`${machineId} · auto-predict on submit`}>
+      <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {[
+          { key: "air_temperature", label: "Air Temp (K)", placeholder: "298.1" },
+          { key: "process_temperature", label: "Process Temp (K)", placeholder: "308.6" },
+          { key: "rotational_speed", label: "Speed (rpm)", placeholder: "1450" },
+          { key: "torque", label: "Torque (Nm)", placeholder: "45" },
+          { key: "tool_wear", label: "Tool Wear (min)", placeholder: "120" },
+        ].map((f) => (
+          <label key={f.key} className="block">
+            <span className="mb-1.5 block text-[11px] font-medium text-ink-2">{f.label}</span>
+            <input
+              type="number"
+              step="any"
+              value={sensors[f.key as keyof typeof sensors]}
+              onChange={(e) => setSensors({ ...sensors, [f.key]: e.target.value })}
+              placeholder={f.placeholder}
+              className={inputCls}
+            />
+          </label>
+        ))}
+        <div className="col-span-2 flex items-end gap-2 sm:col-span-5">
+          <Button type="submit" variant="primary" size="sm" icon={<Send className="h-3.5 w-3.5" />} loading={loading}>
+            Update & Predict
+          </Button>
+          {success && (
+            <span className="text-[12px] text-status-healthy">Updated — prediction stored</span>
+          )}
+        </div>
+        {error && (
+          <div className="col-span-2 sm:col-span-5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-destructive text-sm">
+            {error}
+          </div>
+        )}
+      </form>
+    </Panel>
   );
 }

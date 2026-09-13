@@ -5,10 +5,13 @@ export interface Machine {
   id: string;
   machine_id: string;
   name: string;
-  model?: string;
-  mission_id?: string;
+  type?: string;
   location?: string;
+  sensor_values: Record<string, any>;
   is_active: boolean;
+  assessment_count: number;
+  latest_health_status?: string;
+  latest_risk_level?: string;
   created_at: string;
   updated_at: string;
 }
@@ -23,7 +26,7 @@ export function useMachines() {
     setError(null);
     try {
       const data = await api.listMachines();
-      setMachines(data);
+      setMachines(data.items ?? data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to fetch machines");
     } finally {
@@ -38,7 +41,7 @@ export function useMachines() {
   return { machines, loading, error, refetch: fetch };
 }
 
-export function useAssessments(params?: { machine_id?: string; mission_id?: string; page?: number; page_size?: number }) {
+export function useAssessments(params?: { machine_id?: string; page?: number; page_size?: number }) {
   const [assessments, setAssessments] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -56,7 +59,7 @@ export function useAssessments(params?: { machine_id?: string; mission_id?: stri
     } finally {
       setLoading(false);
     }
-  }, [params]);
+  }, [params?.machine_id, params?.page, params?.page_size]);
 
   useEffect(() => {
     fetch();
@@ -65,7 +68,7 @@ export function useAssessments(params?: { machine_id?: string; mission_id?: stri
   return { assessments, total, loading, error, refetch: fetch };
 }
 
-export function useAlerts(params?: { machine_id?: string; mission_id?: string; status?: string; severity?: string; page?: number; page_size?: number }) {
+export function useAlerts(params?: { machine_id?: string; severity?: string; page?: number; page_size?: number }) {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -83,7 +86,7 @@ export function useAlerts(params?: { machine_id?: string; mission_id?: string; s
     } finally {
       setLoading(false);
     }
-  }, [params]);
+  }, [params?.machine_id, params?.severity, params?.page, params?.page_size]);
 
   useEffect(() => {
     fetch();
