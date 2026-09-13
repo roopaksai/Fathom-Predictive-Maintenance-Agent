@@ -1,18 +1,16 @@
 import { derive, round, uid } from "@/lib/derived";
 import { healthFromProbability, riskFromProbability, priorityFromProbability, FAILURE_MODES } from "@/lib/domain";
-import { LiveError, parseGradioOutputs, postAssess, streamAssess } from "@/lib/api/gradio";
 import { simulateAssessment } from "@/lib/api/fallback";
-import { apiBase, useSimulated } from "@/lib/config";
+import { api } from "@/lib/api/client";
 export async function probeConnection() {
-    const base = apiBase();
     try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 8000);
-        const res = await fetch(`${base}/gradio_api/info`, { signal: ctrl.signal });
+        const res = await fetch(`${api["baseUrl"]}/api/v1/health`, { signal: ctrl.signal });
         clearTimeout(timer);
         if (!res.ok)
             return { status: "offline", message: `Backend responded ${res.status}` };
-        return { status: "live", message: `Connected to ${base}` };
+        return { status: "live", message: `Connected to ${api["baseUrl"]}` };
     }
     catch (e) {
         return {
@@ -22,33 +20,37 @@ export async function probeConnection() {
     }
 }
 export async function runAssessment(input) {
-    const forced = useSimulated();
-    if (forced) {
-        const sim = simulateAssessment(input);
+    const baseUrl = api["baseUrl"];
+    // Try FastAPI first
+    try {
+        const assessment = await api.predict(input);
         return {
-            assessment: buildAssessment(input, simDataToGradio(sim), "simulated"),
-            connection: { status: "simulated", message: "Simulation enabled — point live in Settings to use the shared model." },
+            assessment: normalizeAssessment(assessment),
+            connection: { status: "live", message: `Connected to ${baseUrl} (FastAPI)` },
         };
     }
-    const base = apiBase();
+    catch (fastApiError) {
+        console.warn("FastAPI prediction failed, trying Gradio:", fastApiError);
+    }
+    // Try Gradio as fallback
     try {
-        const eventId = await postAssess(base, input);
-        const outputs = await streamAssess(base, eventId);
+        const eventId = await postAssess(baseUrl, input);
+        const outputs = await streamAssess(baseUrl, eventId);
         const data = parseGradioOutputs(input, outputs);
         return {
             assessment: buildAssessment(input, data, "live"),
-            connection: { status: "live", message: `Connected to ${base}` },
+            connection: { status: "live", message: `Connected to ${baseUrl} (Gradio fallback)` },
         };
     }
-    catch (e) {
-        const detail = e instanceof LiveError ? e.message : e instanceof Error ? e.message : "Unknown backend error";
-        const title = e instanceof LiveError && e.title ? e.title : "Backend error";
-        const sim = simulateAssessment(input);
-        return {
-            assessment: buildAssessment(input, simDataToGradio(sim), "simulated"),
-            connection: { status: "simulated", message: `${title}: ${detail}` },
-        };
+    catch (gradioError) {
+        console.warn("Gradio prediction failed, using simulated:", gradioError);
     }
+    // Final fallback: simulated
+    const sim = simulateAssessment(input);
+    return {
+        assessment: buildAssessment(input, simDataToGradio(sim), "simulated"),
+        connection: { status: "simulated", message: "Using simulated engine — backend unavailable" },
+    };
 }
 function simDataToGradio(sim) {
     return {
@@ -80,6 +82,24 @@ function normalizeHealth(s, p) {
     if (norm.includes("normal") || norm.includes("healthy") || norm.includes("ok"))
         return "Normal";
     return healthFromProbability(p);
+}
+function normalizeAssessment(assessment) {
+    return {
+        ...assessment,
+        healthStatus: normalizeHealth(assessment.healthStatus, assessment.failureProbability),
+        riskLevel: assessment.riskLevel
+            ? (assessment.riskLevel.trim().toLowerCase().includes("critic")
+                ? "Critical"
+                : assessment.riskLevel.trim().toLowerCase().includes("high")
+                    ? "High"
+                    : assessment.riskLevel.trim().toLowerCase().includes("medium")
+                        ? "Medium"
+                        : assessment.riskLevel.trim().toLowerCase().includes("low")
+                            ? "Low"
+                            : riskFromProbability(assessment.failureProbability))
+            : riskFromProbability(assessment.failureProbability),
+        priority: priorityFromProbability(assessment.failureProbability),
+    };
 }
 function buildAssessment(input, data, source) {
     const probability = round(Math.max(0, Math.min(1, data.failureProbability ?? 0)), 4);
@@ -128,5 +148,93 @@ function buildAssessment(input, data, source) {
         modelVersion: data.modelVersion,
         latencyMs: data.latencyMs,
         notice: data.notice,
+    };
+}
+// Gradio fallback functions
+const GRADIO_API_URL = "https://vvsgyuv123-predictive-maintenance-demo.hf.space/gradio_api";
+async function postAssess(base, input) {
+    const res = await fetch(`${GRADIO_API_URL}/call/assess`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            data: [
+                input.productType,
+                input.airTemp,
+                input.processTemp,
+                input.speed,
+                input.torque,
+                input.toolWear,
+                input.machineId || "UNKNOWN",
+                input.state || "RUNNING",
+            ],
+        }),
+    });
+    if (!res.ok)
+        throw new Error(`Gradio call failed: ${res.status}`);
+    const json = await res.json();
+    const eventId = json.event_id;
+    if (!eventId)
+        throw new Error("No event_id from Gradio");
+    return eventId;
+}
+async function streamAssess(base, eventId) {
+    const res = await fetch(`${GRADIO_API_URL}/call/assess/${eventId}`, {
+        headers: { Accept: "text/event-stream" },
+    });
+    if (!res.ok)
+        throw new Error(`Gradio stream failed: ${res.status}`);
+    const reader = res.body?.getReader();
+    if (!reader)
+        throw new Error("No response body");
+    const decoder = new TextDecoder();
+    const outputs = [];
+    let buffer = "";
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done)
+            break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+            if (line.startsWith("data: ")) {
+                try {
+                    const parsed = JSON.parse(line.slice(6));
+                    if (parsed.msg === "process_completed") {
+                        outputs.push(...parsed.output?.data ?? []);
+                    }
+                }
+                catch {
+                    // Ignore parse errors
+                }
+            }
+        }
+    }
+    return outputs;
+}
+function parseGradioOutputs(input, outputs) {
+    if (!outputs.length)
+        throw new Error("No outputs from Gradio");
+    const data = outputs[0];
+    return {
+        failureProbability: data.failure_probability,
+        healthStatus: data.health_status,
+        riskLevel: data.risk_level,
+        modes: data.failure_modes?.map((m) => ({
+            code: m.mode_code,
+            name: m.mode_name,
+            probability: m.probability,
+            confidence: m.confidence,
+            note: m.note,
+        })) ?? [],
+        contributing: data.contributing_features ?? [],
+        evidence: data.condition_evidence ?? [],
+        explanation: data.explanation,
+        recommendation: data.recommended_maintenance_action,
+        decisionThreshold: data.decision_threshold,
+        anomalyPercentile: data.anomaly_percentile,
+        modelVersion: data.model_version,
+        latencyMs: data.latency_ms,
+        notice: data.decision_support_notice,
     };
 }
