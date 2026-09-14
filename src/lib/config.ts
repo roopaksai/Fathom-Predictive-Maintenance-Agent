@@ -1,7 +1,7 @@
 export const APP = {
   name: "Fathom",
   product: "Predictive Maintenance Agent",
-  defaultApiBase: "http://localhost:8000",
+  defaultApiBase: "https://web-production-b59a7.up.railway.app",
   warmupTimeoutMs: 12000,
   alertThreshold: 0.6,
   criticalThreshold: 0.8,
