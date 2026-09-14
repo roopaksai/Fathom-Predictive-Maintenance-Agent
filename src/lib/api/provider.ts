@@ -3,6 +3,7 @@ import { derive, round, uid } from "@/lib/derived";
 import { healthFromProbability, riskFromProbability, priorityFromProbability, FAILURE_MODES } from "@/lib/domain";
 import { simulateAssessment } from "@/lib/api/fallback";
 import { api } from "@/lib/api/client";
+import { apiBase } from "@/lib/config";
 
 export type ConnectionStatus = "checking" | "live" | "simulated" | "offline";
 
@@ -13,12 +14,13 @@ export interface Connection {
 
 export async function probeConnection(): Promise<Connection> {
   try {
+    const base = apiBase();
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(`${api["baseUrl"]}/api/v1/health`, { signal: ctrl.signal });
+    const res = await fetch(`${base}/api/v1/health`, { signal: ctrl.signal });
     clearTimeout(timer);
     if (!res.ok) return { status: "offline", message: `Backend responded ${res.status}` };
-    return { status: "live", message: `Connected to ${api["baseUrl"]}` };
+    return { status: "live", message: `Connected to ${base}` };
   } catch (e) {
     return {
       status: "offline",
@@ -33,7 +35,7 @@ export interface RunResult {
 }
 
 export async function runAssessment(input: AssessInput): Promise<RunResult> {
-  const baseUrl = api["baseUrl"];
+  const baseUrl = apiBase();
 
   // Try FastAPI first
   try {

@@ -9,6 +9,18 @@ export function AppShell() {
   const probe = useAppStore((s) => s.probe);
   useEffect(() => {
     void probe(probeConnection);
+
+    const interval = setInterval(() => {
+      void probe(probeConnection);
+    }, 30_000);
+
+    const onFocus = () => void probe(probeConnection);
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [probe]);
 
   return (

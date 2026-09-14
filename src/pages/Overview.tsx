@@ -12,6 +12,7 @@ import { DistributionBar } from "@/components/instrument/DistributionBar";
 import { Sparkline } from "@/components/instrument/Sparkline";
 import { StatusBadge } from "@/components/instrument/StatusBadge";
 import { useAppStore } from "@/lib/store";
+import { useAssessments } from "@/hooks/use-machines";
 import { APP } from "@/lib/config";
 import { fmtPercent, fmtTs } from "@/lib/derived";
 import { machineSummaries, countByHealth, meanProbability, atRisk, trendSeries } from "@/lib/stats";
@@ -25,7 +26,15 @@ const RISK_META: Record<RiskLevel, { color: string }> = {
 };
 
 export function Overview() {
-  const assessments = useAppStore((s) => s.assessments);
+  const { assessments: backendAssessments } = useAssessments({ page_size: 100 });
+  const localAssessments = useAppStore((s) => s.assessments);
+  const assessments = useMemo(() => {
+    const byId = new Map(backendAssessments.map((a: any) => [a.id, a]));
+    for (const a of localAssessments) {
+      if (!byId.has(a.id)) byId.set(a.id, a);
+    }
+    return Array.from(byId.values());
+  }, [backendAssessments, localAssessments]);
   const alerts = useAppStore((s) => s.alerts);
   const connection = useAppStore((s) => s.connection);
 

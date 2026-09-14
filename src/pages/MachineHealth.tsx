@@ -12,6 +12,7 @@ import { FeatureBars } from "@/components/instrument/FeatureBars";
 import { useAppStore } from "@/lib/store";
 import { api } from "@/lib/api/client";
 import { derive, fmtNum, fmtPercent, fmtInt, fmtTs } from "@/lib/derived";
+import type { Assessment } from "@/lib/types";
 import { machineSummaries } from "@/lib/stats";
 import { useMachines, useAssessments } from "@/hooks/use-machines";
 import { cn } from "@/lib/utils/cn";
@@ -32,14 +33,33 @@ export function MachineHealth() {
 
   const summaries = useMemo(() => machineSummaries(assessments), [assessments]);
 
+  const machineList = useMemo(() => {
+    const byId = new Map<string, { machineId: string; name?: string; latest: Assessment | null; count: number; trend: Assessment[] }>();
+    for (const m of machines) {
+      byId.set(m.machine_id, { machineId: m.machine_id, name: m.name, latest: null, count: 0, trend: [] });
+    }
+    for (const s of summaries) {
+      if (byId.has(s.machineId)) {
+        const entry = byId.get(s.machineId)!;
+        entry.latest = s.latest;
+        entry.count = s.count;
+        entry.trend = s.trend;
+      } else {
+        byId.set(s.machineId, { machineId: s.machineId, latest: s.latest, count: s.count, trend: s.trend });
+      }
+    }
+    return Array.from(byId.values());
+  }, [machines, summaries]);
+
   const active = useMemo<MachineSummary | undefined>(() => {
     const requested = searchParams.get("machine");
-    return summaries.find((m) => m.machineId === requested) ?? summaries[0];
+    if (requested) return summaries.find((m) => m.machineId === requested);
+    return summaries[0];
   }, [summaries, searchParams]);
 
   const filtered = useMemo(
-    () => summaries.filter((m) => m.machineId.toLowerCase().includes(query.trim().toLowerCase())),
-    [summaries, query],
+    () => machineList.filter((m) => m.machineId.toLowerCase().includes(query.trim().toLowerCase())),
+    [machineList, query],
   );
 
   const tone = connection.status === "live" ? "healthy" : connection.status === "simulated" ? "elevated" : connection.status === "offline" ? "critical" : "neutral";
@@ -88,7 +108,7 @@ export function MachineHealth() {
         </div>
       )}
 
-      {!summaries.length && !machinesLoading && !assessmentsLoading ? (
+      {!machineList.length && !machinesLoading && !assessmentsLoading ? (
         <EmptyState
           icon={Cpu}
           eyebrow="No machines yet"
@@ -134,14 +154,14 @@ export function MachineHealth() {
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="truncate font-mono text-xs text-ink">{m.machineId}</span>
-                              <StatusBadge value={m.latest.healthStatus} />
+                              {m.latest && <StatusBadge value={m.latest.healthStatus} />}
                             </div>
                             <p className="mt-0.5 font-mono text-[10px] tabular-nums text-ink-3">
                               {m.count} assessment{m.count === 1 ? "" : "s"}
                             </p>
                           </div>
                           <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-ink">
-                            {fmtPercent(m.latest.failureProbability)}
+                            {m.latest ? fmtPercent(m.latest.failureProbability) : "—"}
                           </span>
                         </button>
                       </li>

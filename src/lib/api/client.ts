@@ -1,6 +1,7 @@
 import type { AssessInput, Assessment, Alert } from "@/lib/types";
+import { apiBase } from "@/lib/config";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
+const API_BASE = apiBase();
 
 class ApiClient {
   private baseUrl: string;
