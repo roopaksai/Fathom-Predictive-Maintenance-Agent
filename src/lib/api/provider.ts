@@ -50,8 +50,8 @@ export async function runAssessment(input: AssessInput): Promise<RunResult> {
 
   // Try Gradio as fallback
   try {
-    const eventId = await postAssess(baseUrl, input);
-    const outputs = await streamAssess(baseUrl, eventId);
+    const eventId = await postAssess(input);
+    const outputs = await streamAssess(eventId);
     const data = parseGradioOutputs(input, outputs);
     return {
       assessment: buildAssessment(input, data, "live"),
@@ -175,21 +175,18 @@ function buildAssessment(input: AssessInput, data: any, source: "live" | "simula
 // Gradio fallback functions
 const GRADIO_API_URL = "https://vvsgyuv123-predictive-maintenance-demo.hf.space/gradio_api";
 
-async function postAssess(base: string, input: AssessInput): Promise<string> {
-  const res = await fetch(`${GRADIO_API_URL}/call/assess`, {
+async function postAssess(input: AssessInput): Promise<string> {
+  const res = await fetch(`${GRADIO_API_URL}/call/v2/assess`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      data: [
-        input.productType,
-        input.airTemp,
-        input.processTemp,
-        input.speed,
-        input.torque,
-        input.toolWear,
-        input.machineId || "UNKNOWN",
-        input.state || "RUNNING",
-      ],
+      product_type: input.productType,
+      air: input.airTemp,
+      process: input.processTemp,
+      speed: input.speed,
+      torque: input.torque,
+      wear: input.toolWear,
+      machine: input.machineId || "DEMO-001",
     }),
   });
   if (!res.ok) throw new Error(`Gradio call failed: ${res.status}`);
@@ -199,8 +196,8 @@ async function postAssess(base: string, input: AssessInput): Promise<string> {
   return eventId;
 }
 
-async function streamAssess(base: string, eventId: string): Promise<any[]> {
-  const res = await fetch(`${GRADIO_API_URL}/call/assess/${eventId}`, {
+async function streamAssess(eventId: string): Promise<any[]> {
+  const res = await fetch(`${GRADIO_API_URL}/call/v2/assess/${eventId}`, {
     headers: { Accept: "text/event-stream" },
   });
   if (!res.ok) throw new Error(`Gradio stream failed: ${res.status}`);
@@ -209,6 +206,7 @@ async function streamAssess(base: string, eventId: string): Promise<any[]> {
   const decoder = new TextDecoder();
   const outputs: any[] = [];
   let buffer = "";
+  let sawError = false;
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -216,14 +214,25 @@ async function streamAssess(base: string, eventId: string): Promise<any[]> {
     const lines = buffer.split("\n");
     buffer = lines.pop() || "";
     for (const line of lines) {
+      if (line === "event: error") {
+        sawError = true;
+      }
       if (line.startsWith("data: ")) {
         try {
+          if (sawError) {
+            const err = JSON.parse(line.slice(6));
+            throw new Error(err.error ?? "Gradio space error");
+          }
           const parsed = JSON.parse(line.slice(6));
-          if (parsed.msg === "process_completed") {
+          if (Array.isArray(parsed)) {
+            outputs.push(...parsed);
+          } else if (parsed.msg === "process_completed") {
+            // Legacy Gradio format fallback
             outputs.push(...parsed.output?.data ?? []);
           }
-        } catch {
-          // Ignore parse errors
+        } catch (e) {
+          if (e instanceof Error && !(e instanceof SyntaxError)) throw e;
+          // Ignore JSON parse errors
         }
       }
     }
@@ -233,27 +242,53 @@ async function streamAssess(base: string, eventId: string): Promise<any[]> {
 
 function parseGradioOutputs(input: AssessInput, outputs: any[]) {
   if (!outputs.length) throw new Error("No outputs from Gradio");
-  const data = outputs[0];
+  const data = outputs[15]; // "Full model response" (Json component, index 15 of 17)
+  if (!data || typeof data !== "object") {
+    throw new Error("Full model response missing from Gradio output");
+  }
   return {
     failureProbability: data.failure_probability,
     healthStatus: data.health_status,
     riskLevel: data.risk_level,
-    modes: data.failure_modes?.map((m: any) => ({
-      code: m.mode_code,
-      name: m.mode_name,
+    modes: (data.likely_failure_modes ?? data.failure_modes)?.map((m: any) => ({
+      code: m.mode ?? m.mode_code,
+      name: m.name ?? m.mode_name,
       probability: m.probability,
-      confidence: m.confidence,
-      note: m.note,
+      confidence: m.score_kind ?? m.confidence,
+      note: m.limitation ?? m.note,
     })) ?? [],
-    contributing: data.contributing_features ?? [],
-    evidence: data.condition_evidence ?? [],
+    contributing: (data.contributing_features ?? []).map((f: any) => ({
+      key: f.feature,
+      label: f.feature,
+      value: f.value,
+      unit: f.units ?? "failure probability contribution",
+      magnitude: Math.abs(f.contribution ?? 0),
+      direction: typeof f.direction === "string" && f.direction.startsWith("increases")
+        ? "increases"
+        : "decreases",
+    })),
+    evidence: Array.isArray(data.condition_evidence) && data.condition_evidence.length
+      ? data.condition_evidence.map((e: any) => {
+          const measuredText = e.measured && Object.keys(e.measured).length
+            ? Object.entries(e.measured)
+                .map(([k, v]) => `${k}=${typeof v === "number" ? v.toPrecision(4) : v}`)
+                .join("; ")
+            : "n/a";
+          return `${e.mode} (${e.kind ?? "evidence"}): ${e.rule} - triggered=${e.triggered} - measured: ${measuredText}`;
+        })
+      : data.evidence ?? [],
     explanation: data.explanation,
-    recommendation: data.recommended_maintenance_action,
+    recommendation: Array.isArray(data.recommended_maintenance_action)
+      ? data.recommended_maintenance_action.join(" ")
+      : data.recommended_maintenance_action,
     decisionThreshold: data.decision_threshold,
-    anomalyPercentile: data.anomaly_percentile,
+    anomalyPercentile: typeof data.anomaly_percentile === "number"
+      ? (data.anomaly_percentile > 1 ? data.anomaly_percentile : data.anomaly_percentile * 100)
+      : data.anomaly_percentile,
     modelVersion: data.model_version,
     latencyMs: data.latency_ms,
     notice: data.decision_support_notice,
+    conditionEvidenceRaw: data.condition_evidence,
   };
 }
 
