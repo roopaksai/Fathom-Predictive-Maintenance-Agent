@@ -10,7 +10,6 @@ import { StatCard } from "@/components/instrument/StatCard";
 import { RiskGauge } from "@/components/instrument/RiskGauge";
 import { FeatureBars } from "@/components/instrument/FeatureBars";
 import { useAppStore } from "@/lib/store";
-import { FAILURE_MODES } from "@/lib/domain";
 import { derive, fmtInt, fmtNum, fmtPercent, fmtTs } from "@/lib/derived";
 import type { Assessment, HealthStatus } from "@/lib/types";
 
@@ -101,7 +100,11 @@ export function Insights() {
 
 function InsightsReport({ a }: { a: Assessment }) {
   const d = derive(a.inputs);
-  const modeMeta = FAILURE_MODES[a.mode.code];
+  const recommendationSelections = useAppStore((s) => s.recommendationSelections);
+  const selectRecommendation = useAppStore((s) => s.selectRecommendation);
+  const options = a.recommendationOptions;
+  const selectedOptionId =
+    recommendationSelections[a.inputs.machineId]?.optionId ?? a.selectedRecommendationId;
 
   const parameterRows = a.contributing.length
     ? a.contributing.map((f) => ({
@@ -123,47 +126,6 @@ function InsightsReport({ a }: { a: Assessment }) {
         { key: "torque", label: LABELS.torque, value: `${fmtNum(a.inputs.torque, 1)} Nm`, chip: <Badge tone="neutral">neutral</Badge> },
         { key: "toolWear", label: LABELS.toolWear, value: `${fmtNum(a.inputs.toolWear, 1)} min`, chip: <Badge tone="neutral">neutral</Badge> },
       ];
-
-  const tips = [
-    {
-      key: "mode",
-      text: (
-        <>
-          Predicted mode: <span className="text-ink">{a.mode.name}</span>
-          {a.mode.confidence !== undefined && <> (confidence {fmtPercent(a.mode.confidence)})</>} with failure
-          probability <span className="font-mono font-semibold text-ink">{fmtPercent(a.failureProbability)}</span>.
-        </>
-      ),
-    },
-    {
-      key: "cause",
-      text: (
-        <>
-          Root-cause hypothesis:{" "}
-          <span className="text-ink">
-            {a.mode.code === "NONE" ? "No dominant degradation driver detected." : modeMeta.cause}
-          </span>
-        </>
-      ),
-    },
-    {
-      key: "indicator",
-      text: (
-        <>
-          Primary indicator to watch: <span className="text-ink">{modeMeta.indicator}</span>
-        </>
-      ),
-    },
-    {
-      key: "calibration",
-      text: (
-        <>
-          Decision support only — the model is factory-calibrated; validate against factory calibration before
-          acting.
-        </>
-      ),
-    },
-  ];
 
   return (
     <>
@@ -277,20 +239,41 @@ function InsightsReport({ a }: { a: Assessment }) {
         <p className="text-[13.5px] leading-relaxed text-ink-2">{a.explanation}</p>
       </Panel>
 
-      <Panel title="Key takeaways" eyebrow="Decision summary">
-        <ol className="space-y-2">
-          {tips.map((t) => (
-            <li key={t.key} className="flex items-start gap-2.5 rounded-lg border border-hairline bg-surface/40 px-3 py-2.5">
-              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-signal" strokeWidth={2} />
-              <p className="text-[12.5px] leading-relaxed text-ink-2">{t.text}</p>
-            </li>
-          ))}
-        </ol>
-      </Panel>
-
-      <Panel title="Recommended action" eyebrow="Next step">
-        <p className="text-[13.5px] leading-relaxed text-ink-2">{a.recommendation}</p>
-      </Panel>
+      {options?.length ? (
+        <Panel title="Recommendation options" eyebrow="Choose a response">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {options.slice(0, 4).map((opt) => {
+              const isSelected = opt.id === selectedOptionId;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => selectRecommendation(a.inputs.machineId, a.id, opt.id)}
+                  aria-pressed={isSelected}
+                  className={`flex w-full flex-col items-start gap-1.5 rounded-lg border px-3.5 py-3 text-left transition-colors ${
+                    isSelected
+                      ? "border-signal/60 bg-signal/10 ring-1 ring-signal/40"
+                      : "border-hairline bg-surface/40 hover:border-signal/30 hover:bg-surface/70"
+                  }`}
+                >
+                  <div className="flex w-full items-center justify-between gap-2.5">
+                    <span className="flex items-center gap-1.5 text-[13px] font-medium leading-snug text-ink">
+                      {opt.title}
+                      {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-signal" strokeWidth={2.5} />}
+                    </span>
+                    <Badge tone={effortTone(opt.effort)}>{opt.effort}</Badge>
+                  </div>
+                  <span className="text-[12px] leading-relaxed text-ink-2">{opt.summary}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Panel>
+      ) : (
+        <Panel title="Recommended action" eyebrow="Next step">
+          <p className="text-[13.5px] leading-relaxed text-ink-2">{a.recommendation}</p>
+        </Panel>
+      )}
     </>
   );
 }
@@ -300,5 +283,13 @@ function toneForStatus(status: string): "healthy" | "elevated" | "high" | "criti
   if (status === "High Risk" || status === "High") return "high";
   if (status === "Warning" || status === "Medium") return "elevated";
   if (status === "Normal" || status === "Low") return "healthy";
+  return "neutral";
+}
+
+function effortTone(effort: string): "healthy" | "elevated" | "high" | "critical" | "signal" | "neutral" {
+  const s = effort.toLowerCase();
+  if (s.includes("immediate")) return "high";
+  if (s.includes("shift") || s.includes("week")) return "elevated";
+  if (s.includes("planned")) return "healthy";
   return "neutral";
 }

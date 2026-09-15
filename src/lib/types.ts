@@ -6,6 +6,10 @@ export type Severity = "Warning" | "High" | "Critical";
 
 export type FailureModeCode = "TWF" | "HDF" | "PWF" | "OSF" | "RNF" | "NONE";
 
+export type RecommendationUrgency = "Immediate" | "Today" | "This week" | "Next planned stop" | "Optional";
+
+export type RecommendationSource = "llm" | "deterministic" | "catalog";
+
 export type ProductType = "L" | "M" | "H";
 
 export interface AssessInput {
@@ -43,6 +47,22 @@ export interface FailureModeOutcome {
   note?: string;
 }
 
+export type RecommendationEffort =
+  | "Immediate"
+  | "Next shift"
+  | "This week"
+  | "Next planned stop";
+
+export interface RecommendationOption {
+  id: string;
+  title: string;
+  summary: string;
+  rationale: string;
+  effort: RecommendationEffort;
+  priority: "Low" | "Medium" | "High" | "Critical";
+  source: "llm" | "deterministic";
+}
+
 export interface Assessment {
   id: string;
   ts: string;
@@ -60,10 +80,19 @@ export interface Assessment {
   evidence: string[];
   explanation: string;
   recommendation: string;
+  recommendationOptions?: RecommendationOption[];
+  selectedRecommendationId?: string;
   priority: Severity | "Routine";
   modelVersion?: string;
   latencyMs?: number;
   notice?: string;
+}
+
+export interface MachineRecommendationSelection {
+  machineId: string;
+  optionId: string;
+  ts: string;
+  assessmentId: string;
 }
 
 export type AlertStatus = "Open" | "Acknowledged" | "Resolved";

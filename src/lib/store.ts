@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Alert, AlertStatus, Assessment, Notification } from "@/lib/types";
+import type {
+  Alert,
+  AlertStatus,
+  Assessment,
+  MachineRecommendationSelection,
+  Notification,
+} from "@/lib/types";
 import { uid, clampP } from "@/lib/derived";
 import { severityFromProbability, riskFromProbability } from "@/lib/domain";
 import { APP } from "@/lib/config";
@@ -17,6 +23,7 @@ interface AppState {
   assessments: Assessment[];
   alerts: Alert[];
   notifications: Notification[];
+  recommendationSelections: Record<string, MachineRecommendationSelection>;
   sidebarOpen: boolean;
   setConnection: (c: Connection) => void;
   probe: (p: () => Promise<Connection>) => Promise<void>;
@@ -30,6 +37,7 @@ interface AppState {
   resolveAlert: (id: string) => void;
   markNotificationsRead: () => void;
   markNotificationRead: (id: string) => void;
+  selectRecommendation: (machineId: string, assessmentId: string, optionId: string) => void;
 }
 
 function buildAlert(a: Assessment): Alert {
@@ -56,6 +64,7 @@ export const useAppStore = create<AppState>()(
       assessments: [],
       alerts: [],
       notifications: [],
+      recommendationSelections: {},
       sidebarOpen: false,
 
       setConnection: (c) => set({ connection: c }),
@@ -134,6 +143,14 @@ export const useAppStore = create<AppState>()(
           notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
         })),
 
+      selectRecommendation: (machineId, assessmentId, optionId) =>
+        set((s) => ({
+          recommendationSelections: {
+            ...s.recommendationSelections,
+            [machineId]: { machineId, assessmentId, optionId, ts: new Date().toISOString() },
+          },
+        })),
+
     }),
     {
       name: "fathom.app.v1",
@@ -141,6 +158,7 @@ export const useAppStore = create<AppState>()(
         assessments: s.assessments,
         alerts: s.alerts,
         notifications: s.notifications,
+        recommendationSelections: s.recommendationSelections,
       }),
     },
   ),

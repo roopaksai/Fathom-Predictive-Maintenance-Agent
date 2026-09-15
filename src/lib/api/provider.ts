@@ -1,4 +1,4 @@
-import type { AssessInput, Assessment } from "@/lib/types";
+﻿import type { AssessInput, Assessment } from "@/lib/types";
 import { simulateAssessment } from "@/lib/api/fallback";
 import { api } from "@/lib/api/client";
 import { apiBase } from "@/lib/config";
@@ -12,15 +12,30 @@ export interface Connection {
 }
 
 export async function probeConnection(): Promise<Connection> {
-  try {
-    const base = apiBase();
+  const base = apiBase();
+  const attempt = (path: string, timeoutMs: number): Promise<Response> => {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(`${base}/api/v1/health`, { signal: ctrl.signal });
-    clearTimeout(timer);
-    if (!res.ok) return { status: "offline", message: `Backend responded ${res.status}` };
-    return { status: "live", message: `Connected to ${base}` };
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    return fetch(`${base}${path}`, { signal: ctrl.signal }).finally(() => clearTimeout(timer));
+  };
+  const legacyFallback = async (): Promise<Connection | null> => {
+    try {
+      const res = await attempt("/health", 6000);
+      if (res.ok) return { status: "live", message: `Connected to ${base} (legacy health endpoint)` };
+    } catch {
+      /* fall through to offline */
+    }
+    return null;
+  };
+  try {
+    const res = await attempt("/api/v1/health", 8000);
+    if (res.ok) return { status: "live", message: `Connected to ${base}` };
+    const fallback = await legacyFallback();
+    if (fallback) return fallback;
+    return { status: "offline", message: `Backend responded ${res.status}` };
   } catch (e) {
+    const fallback = await legacyFallback();
+    if (fallback) return fallback;
     return {
       status: "offline",
       message: e instanceof Error && e.name === "AbortError" ? "Backend unreachable (timeout)" : "Backend unreachable",
@@ -71,7 +86,7 @@ export async function runAssessment(input: AssessInput): Promise<RunResult> {
   const sim = simulateAssessment(input);
   return {
     assessment: buildAssessment(input, simDataToGradio(sim), "simulated"),
-    connection: { status: "simulated", message: "Using simulated engine — backend unavailable" },
+    connection: { status: "simulated", message: "Using simulated engine â€” backend unavailable" },
   };
 }
 

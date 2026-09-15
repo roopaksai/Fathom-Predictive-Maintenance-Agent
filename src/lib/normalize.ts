@@ -7,7 +7,7 @@ import type {
   Source,
 } from "@/lib/types";
 import { derive, round, clampP, uid } from "@/lib/derived";
-import { FAILURE_MODES, healthFromProbability, riskFromProbability, priorityFromProbability } from "@/lib/domain";
+import { FAILURE_MODES, healthFromProbability, riskFromProbability, priorityFromProbability, buildRecommendationOptions } from "@/lib/domain";
 
 /**
  * Backend interoperability helpers.
@@ -142,6 +142,8 @@ export function parseAssessmentPayload(data: any) {
     recommendation: Array.isArray(data.recommended_maintenance_action)
       ? data.recommended_maintenance_action.join(" ")
       : data.recommended_maintenance_action,
+    recommendationOptions: data.recommendationOptions ?? data.recommendation_options ?? [],
+    selectedRecommendationId: data.selectedRecommendationId ?? data.selected_recommendation_id ?? undefined,
     decisionThreshold,
     anomalyPercentile:
       typeof data.anomaly_percentile === "number"
@@ -208,6 +210,15 @@ export function buildAssessment(
     evidence,
     explanation,
     recommendation,
+    recommendationOptions:
+      Array.isArray(data.recommendationOptions) && data.recommendationOptions.length
+        ? data.recommendationOptions
+        : buildRecommendationOptions(
+            modeCode,
+            probability,
+            source === "live" || source === "fastapi" ? "llm" : "deterministic",
+          ),
+    selectedRecommendationId: data.selectedRecommendationId ?? data.selected_recommendation_id,
     priority: priorityFromProbability(probability),
     modelVersion: data.modelVersion,
     latencyMs: data.latencyMs,
