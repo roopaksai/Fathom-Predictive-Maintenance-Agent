@@ -52,7 +52,25 @@ export function useAssessments(params?: { machine_id?: string; page?: number; pa
     setError(null);
     try {
       const data = await api.listAssessments(params);
-      setAssessments(data.items);
+      let items = data.items;
+
+      // The list endpoint returns sparse summaries. Upgrade the newest
+      // entries to full details so dashboards render inputs, failure
+      // modes, evidence and recommendations. Capped to avoid a burst of
+      // requests on large histories.
+      if (items.length > 0 && (params?.page ?? 1) === 1) {
+        const ids = items.slice(0, 25).flatMap((a: any) => (a?.id ? [a.id] : []));
+        const details = await Promise.allSettled(
+          ids.map((id: string) => api.getAssessment(id)),
+        );
+        const byId = new Map<string, any>();
+        details.forEach((d) => {
+          if (d.status === "fulfilled") byId.set(String(d.value.id), d.value);
+        });
+        items = items.map((a: any) => (a?.id && byId.has(a.id) ? byId.get(a.id) : a));
+      }
+
+      setAssessments(items);
       setTotal(data.total);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to fetch assessments");

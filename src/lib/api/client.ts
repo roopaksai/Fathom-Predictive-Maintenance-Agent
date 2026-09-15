@@ -1,5 +1,6 @@
 import type { AssessInput, Assessment, Alert } from "@/lib/types";
 import { apiBase } from "@/lib/config";
+import { normalizeBackendItem } from "@/lib/normalize";
 
 const API_BASE = apiBase();
 
@@ -61,13 +62,18 @@ class ApiClient {
         if (v !== undefined) searchParams.set(k, String(v));
       });
     }
-    return this.request<{ items: Assessment[]; total: number; page: number; page_size: number }>(
-      `/api/v1/assessments?${searchParams.toString()}`
-    );
+    const res = await this.request<{
+      items: any[];
+      total: number;
+      page: number;
+      page_size: number;
+    }>(`/api/v1/assessments?${searchParams.toString()}`);
+    return { ...res, items: (res.items ?? []).map(normalizeBackendItem) };
   }
 
   async getAssessment(id: string) {
-    return this.request<Assessment>(`/api/v1/assessments/${id}`);
+    const detail = await this.request<any>(`/api/v1/assessments/${id}`);
+    return normalizeBackendItem(detail);
   }
 
   // Alerts
